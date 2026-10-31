@@ -2,11 +2,11 @@
 
 const applyButton = document.querySelector('.apply');
 const defaultFontSizeInput = document.getElementById('default-font-size-input');
-const autoSaveChecbox = document.getElementById('auto-save-checkbox');
+const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
 
 const spotifyButton = document.querySelector('.spotify-button');
 const spotifyConnected = document.querySelector('.spotify-connected');
-const spotifyChecbox = document.getElementById('spotify-checkbox');
+const spotifyCheckbox = document.getElementById('spotify-checkbox');
 
 const driveButton = document.querySelector('.link-drive-button');
 const driveConnected = document.querySelector('.drive-connected');
@@ -32,17 +32,18 @@ function getSettings(){
     document.getElementById('default-font-size-input').value = localStorage.getItem('defaultFontSize');
     const style = document.querySelector('.font-size');
     style.textContent = `
-        span, p {
+        #content span, #content p{
             font-size: ${localStorage.getItem('defaultFontSize')}px;
-            height: ${localStorage.getItem('defaultFontSize')}px;
+            line-height: calc(${localStorage.getItem('defaultFontSize')}px + 4px);
+            height: calc(${localStorage.getItem('defaultFontSize')}px + 4px);
         }
     `;
 
     //autoSave
     if(localStorage.getItem('autoSave') === 'true'){
-        autoSaveChecbox.checked = true;
+        autoSaveCheckbox.checked = true;
     }else{
-        autoSaveChecbox.checked = false;
+        autoSaveCheckbox.checked = false;
     }
 
     //spotify
@@ -55,10 +56,10 @@ function getSettings(){
     }
 
     if(localStorage.getItem('view-spotify-popup') === 'true'){
-        spotifyChecbox.checked = true;
+        spotifyCheckbox.checked = true;
         document.querySelector('.spotify').style.display = 'flex';
     }else{
-        spotifyChecbox.checked = false;
+        spotifyCheckbox.checked = false;
         document.querySelector('.spotify').style.display = 'none';
     }
 
@@ -93,14 +94,14 @@ function setSettings(){
     }
 
     //autoSave
-    if (autoSaveChecbox.checked){
+    if (autoSaveCheckbox.checked){
         localStorage.setItem('autoSave', true);            
     } else {
         localStorage.setItem('autoSave', false);            
     }
 
     //spotify
-    if (spotifyChecbox.checked){
+    if (spotifyCheckbox.checked){
         localStorage.setItem('view-spotify-popup', true);
         document.querySelector('.spotify').style.display = 'flex';
     } else {

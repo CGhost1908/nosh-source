@@ -9,6 +9,7 @@ const path = require('path');
 const os = require('os');
 const { text } = require('stream/consumers');
 const axios = require('axios');
+const { shell } = require('electron');
 
 
 //Code Mirror
@@ -82,9 +83,34 @@ let savesDir;
 const spotifyClientSecret = '';
 const spotifyClientId = '';
 
+//github
+const githubToken = '';
+const repoOwner = 'cghost1908';
+const repoName = 'nosh';
+
 //global variables
-const driveCheckbox = document.querySelector('.save-drive-checkbox');
+
+//Content
+const textTitle = document.querySelector('.text-title');
 
 const home = `
-    <h1></h1>
+    <h1>Version 1.3 Alpha Test Version</h1>
+    <img width="400px" src="src/drive.png">
+    <h2>Google Drive is now ready for testing!</h3>
+    <h3>You can connect your Google Drive account to Nosh and sync your files easily. This is a test version, so please try it out and share your feedback. Your thoughts will help us make it better!</h3>
+    <h3>Thank you for using Nosh!</h3>
+    <br>
+    <h2>1.3.1 Patch</h3>
+    <h3>🔎 Fixed search.</h3>
+    <br>
+    <h1>1.3.2 Patch</h1>
+    <h3>🚀 Now you can <span style="color: #894FDCFF; font-size: inherit;">publish</span> your files on the <span style="color: #894FDCFF; font-size: inherit;">web</span>.</h3>
+    <h3>🎨 Enjoy the all-new, reimagined Settings UI.</h3>
 `;
+
+content.innerHTML = home;
+textTitle.textContent = 'Home';
+
+if(localStorage.getItem('code-theme') === null) {
+    localStorage.setItem('code-theme', 'darcula');
+}

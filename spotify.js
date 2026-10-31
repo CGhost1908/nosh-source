@@ -37,7 +37,7 @@ function spotifySituation() {
 }
 
 function connectSpotify(){
-    const redirectUri = ``;
+    const redirectUri = `http://localhost:${port}/callback`;
     const scope = 'streaming user-read-email user-read-private user-read-playback-state user-read-currently-playing user-read-playback-state user-modify-playback-state streaming';
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${spotifyClientId}&response_type=code&redirect_uri=${redirectUri}&scope=${encodeURIComponent(scope)}`;
 

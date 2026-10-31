@@ -7,8 +7,8 @@ appServer.get('/callback', async (req, res) => {
         return res.send('Authorization failed.');
     }
 
-    const clientId = '2b8a23451e5743778bd1d106443b8305';
-    const clientSecret = '5aa61432cd964dd191c7728ce2a417bf';
+    const clientId = process.env.SPOTIFY_CLIENT_ID || '';
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '';
     const redirectUri = `http://localhost:${port}/callback`;
 
     const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');

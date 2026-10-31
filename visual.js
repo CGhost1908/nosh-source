@@ -2,9 +2,9 @@
 const overlay = document.querySelector('.overlay');
 const popupSection = document.querySelector('.popup-section');
 
+const searchCheckbox = document.querySelector('.search-checkbox');
 
 const menuCheckBox = document.querySelector(".menu-checkbox");
-
 menuCheckBox.addEventListener("change", function(){
     if(menuCheckBox.checked){
         document.querySelector('.left-side').style.width = '50px'; 
@@ -14,7 +14,8 @@ menuCheckBox.addEventListener("change", function(){
         document.querySelector('.organizer2').style.display = 'none';
         document.querySelector('.saves').style.display = 'none';
         document.querySelector('.spotify').style.display = 'none';
-        
+        searchCheckbox.checked = false;
+        searchCheckbox.dispatchEvent(new Event('change'));
     }else{
         document.querySelector('.left-side').style.width = '200px'; 
         document.querySelector('.title').style.width = '90px';
@@ -37,6 +38,11 @@ function closeOverlay(){
     });
 
     document.querySelector('.remove-range').classList.add('no-range-event');
+
+    document.querySelector('.files-popup-loading').style.display = 'none';
+    document.querySelector('.files-popup-success').style.display = 'none';
+
+    resetFilesPopup();
 }
 
 let savedRange;
@@ -75,13 +81,11 @@ function changeTheme(){
 }
 
 
-const searchCheckbox = document.querySelector('.search-checkbox');
 searchCheckbox.addEventListener("change", function(){
     const searchInput = document.querySelector('.search-input');
     const settingsButton = document.querySelector('.settings-button');
     const refreshButton = document.querySelector('.refresh');
     const search = document.querySelector('.search');
-
     if(searchCheckbox.checked){
         search.classList.remove('trio-hover');
         searchInput.style.opacity = '1';
@@ -98,7 +102,6 @@ searchCheckbox.addEventListener("change", function(){
         settingsButton.style.display = 'flex';
         refreshButton.style.display = 'flex';
         search.classList.add('trio-hover');
-        searchInput.value = '';
     }
 })
 
@@ -162,14 +165,35 @@ addVideoButton.addEventListener('mouseout', () => {
 const settingsButton = document.querySelector('.settings-button');
 const settings = document.querySelector('.settings');
 settingsButton.addEventListener('click', function(){
-    overlay.style.opacity = ".3";
-    overlay.style.pointerEvents = "all";
-    popupSection.style.opacity = "1";
-    popupSection.style.pointerEvents = "all";
     settings.style.opacity = "1";
     settings.style.pointerEvents = "all";
-
+    settings.style.transform = "translateX(0)";
 });
+
+function closeSettings(){
+    document.querySelector('.settings').style.opacity = "0";
+    document.querySelector('.settings').style.pointerEvents = "none";
+    settings.style.transform = "translateX(-100%)";
+}
+
+async function openSettingCategory(category){
+    if(category === 'published-files'){
+        showPublishedFiles();
+    }else if(category === 'code-block'){
+        setTimeout(() => {
+            processCodeBlock();
+        }, 100);
+        document.querySelector(`.code-block-theme-option[value="${localStorage.getItem('code-theme')}"]`).classList.add('selected-code-block-theme');
+    }
+    document.querySelector('.settings-active-button').classList.remove('settings-active-button');
+    document.querySelector(`.settings-${category}`).classList.add('settings-active-button');
+
+    const settingsCategories = document.querySelectorAll('.settings-panel');
+    settingsCategories.forEach(element => {
+        element.style.display = 'none';
+    });
+    document.querySelector(`.${category}-settings`).style.display = 'flex';
+}
 
 
 function searchLanguage() {
@@ -238,6 +262,7 @@ function minimizeSpotify(){
     document.querySelector('.controls').style.margin = "0 0 10px 0";
     document.querySelector('.controls').style.borderRadius = "10px 10px 0 0";
     document.querySelector('.track-info').style.display = "none";
+    document.querySelector('#toggle-play').style.fontSize = "36px";
 }
 
 document.querySelector('.spotify').addEventListener('mouseenter', function(){
@@ -245,6 +270,7 @@ document.querySelector('.spotify').addEventListener('mouseenter', function(){
     document.querySelector('.controls').setAttribute('style', '');
     document.querySelector('.controls').setAttribute('style', '');
     document.querySelector('.track-info').setAttribute('style', '');
+    document.querySelector('#toggle-play').style.fontSize = "60px";
     setTimeout(() => {
         document.querySelector('.spotify-volume').setAttribute('style', '')
     }, 300);
@@ -297,6 +323,75 @@ function updateImportDrivePopup(isSuccess){
 }
 
 function exitDriveFilesPopup(){
-    document.querySelector('.drive-saves-popup').style.opacity = '0';
-    document.querySelector('.drive-saves-popup').style.pointerEvents = 'none';
+    document.querySelector('.drive-saves').style.display = 'none';
 }
+
+function copiedNotification(){
+    document.querySelector('.copied-notification').style.opacity = "1";
+    document.querySelector('.copied-notification').style.transform = "translate(-50%, 0)";
+    setTimeout(() => {
+        document.querySelector('.copied-notification').style.opacity = "0";
+        document.querySelector('.copied-notification').style.transform = "translate(-50%, -30px)";
+    }, 2000);
+}
+
+
+const selected = document.querySelector(".files-popup .selected");
+const optionsList = document.querySelector(".files-popup ul");
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    selected.addEventListener("click", () => {
+        optionsList.classList.toggle("active-option");
+        selected.classList.toggle("sharp");
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!selected.parentElement.contains(event.target)) {
+            optionsList.classList.remove("active-option");
+            selected.classList.remove("sharp");
+        }
+    });
+});
+
+
+function closeExampleCodeBlock(){
+    document.querySelector('#example-code-block').style.height = '40px';
+    document.querySelector('#example-code-block div').style.display = 'none';
+    document.querySelector('#example-code-block button').style.display = 'none';
+    document.querySelector('#example-code-block .open-example-code-block').style.display = 'flex';
+}
+
+document.querySelector('.open-example-code-block').addEventListener('click', function(){
+    document.querySelector('#example-code-block').style.height = 'auto';
+    document.querySelector('#example-code-block div').style.display = 'block';
+    document.querySelector('#example-code-block button').style.display = 'flex';
+    document.querySelector('#example-code-block .open-example-code-block').style.display = 'none';
+});
+
+
+
+//Motor
+// document.addEventListener("DOMContentLoaded", () => {
+//     const icon = document.querySelector('.motorcycle');
+//     let position = -icon.clientWidth;
+//     let speed = 1; 
+
+//     function moveIcon() {
+//         position += speed;
+
+//         if (position > window.innerWidth) { 
+//             position = -icon.clientWidth;
+//         }
+
+//         icon.style.left = position + 'px';
+//         requestAnimationFrame(moveIcon);
+//     }
+
+//     icon.style.position = 'absolute';
+//     icon.style.left = position + 'px';
+//     moveIcon();
+// });
+
+
+

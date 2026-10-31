@@ -1,3 +1,4 @@
+const { dropCursor } = require("@codemirror/view");
 
 
 function minimizeWindow() {
@@ -108,8 +109,6 @@ function fileHandle(value){
         fileInput.click();
     }else if(value === 'save'){
         checkSaveType();
-    }else if('save-to-drive'){
-        sendSaveToDrive();
     }else if(value === 'save-as'){
         saveNewFile();
     }else if(value === 'pdf'){
@@ -171,7 +170,6 @@ async function openDesiredFile(desiredFile){
     if(textTitle.innerHTML.includes('<iconify-icon class="save-notice" icon="ic:twotone-data-saver-off"></iconify-icon>')){
         warningSave(desiredFile);
     }else{
-        console.log('openDesiredFilea gelen: ', desiredFile);
         const filePath = `${savesDir}/${desiredFile}.nsh`;
         fs.readFile(filePath, 'utf8', (err, data) => {
             document.getElementById('content').innerHTML = data;
@@ -182,10 +180,11 @@ async function openDesiredFile(desiredFile){
         saveButtons.forEach(button => button.classList.remove('active'));
         document.querySelector(`.save[file-name="${desiredFile}"]`).classList.add('active');
         document.querySelector('.text-title').textContent = desiredFile;
-        // sortSaves();
     }
 
     checkDriveCheckbox();
+    document.querySelector('.share').classList.remove('disabled');
+    document.querySelector('.trash').classList.remove('disabled');
 }
 
 async function warningSave(saveName){
@@ -220,7 +219,9 @@ async function warningSave(saveName){
 function checkTitle(){
     const activeSave = document.querySelector('.active');
     if(activeSave){
-        document.querySelector('.text-title').textContent = activeSave.getAttribute('file-name');
+        textTitle.textContent = activeSave.getAttribute('file-name');
+    }else{
+        textTitle.textContent = 'Home';
     }
 }
 
@@ -314,7 +315,7 @@ document.addEventListener('keydown', (event) => {
     //     const activeElement = document.activeElement;
 
     //     if (activeElement.tagName === 'BUTTON' || activeElement.tagName === 'A') {
-    //         event.preventDefault(); // Tıklamayı engeller
+    //         event.preventDefault();
     //     }
     // }
 });
@@ -324,25 +325,22 @@ function createNewFile(){
 
     const contentHTML = content.innerHTML;
     content.setAttribute('contenteditable', true);
-    document.querySelectorAll('.save').forEach(btn => btn.classList.remove('active'));
+    // document.querySelectorAll('.save').forEach(btn => btn.classList.remove('active'));
 
     let untitledFiles;
-    //Tum dosyalari oku
     fs.readdir(savesDir, (err, files) => {
         if (err) {
-            console.error('Klasörü okurken hata:', err);
+            console.error('Folder reading error:', err);
             return;
         }
     
         untitledFiles = files.filter(file => file.startsWith('untitled') && path.extname(file) === '.nsh');
     
-        // Kullanılabilir en düşük numarayı bul
         let fileNumbers = untitledFiles.map(file => {
             const match = file.match(/untitled(\d+)\.nsh/);
             return match ? parseInt(match[1]) : null;
         }).filter(num => num !== null);
 
-        // Dosya adını belirle
         let newFileName;
         if (fileNumbers.length === 0) {
             newFileName = 'untitled1.nsh';
@@ -351,35 +349,107 @@ function createNewFile(){
             newFileName = `untitled${maxNumber + 1}.nsh`;
         }
 
-        ipcRenderer.invoke('create-file', newFileName, '');
         const filePath = path.join(savesDir, newFileName);
 
-        fs.writeFile(filePath, `<h1 class="content-title">${newFileName.split('.')[0]}</h1>\n<p></p>`, (err) => {
-            if (err) {
-                console.error('Error writing file:', err);
-                return;
-            }
+        ipcRenderer.invoke('create-file', newFileName, '').then(() => {
+            fs.writeFile(filePath, `<h1 class="content-title">${newFileName.split('.')[0]}</h1>\n<p></p>`, (err) => {
+                if (err) {
+                    console.error('File write error:', err);
+                    return;
+                }
+                updateOrder();
+                readDatabase();
+            });
+        }).catch(err => {
+            console.error('Error creating file via IPC:', err);
         });
-        refreshDatabase(newFileName);
-
-        if (document.querySelector(`[file-name="${newFileName.split('.')[0]}"]`)) {
-            document.querySelector(`[file-name="${newFileName.split('.')[0]}"]`).classList.add('active');
-        }
     });
 }
 
 function openSavesDir(){
     exec(`start "" "${savesDir}"`, (err) => {
-        if (err) {
-          console.error('Klasör açılamadı:', err);
+        if(err){
+            console.error('Folder open error:', err);
         }
       });
 }
 
-const textTitle = document.querySelector('.text-title');
 
 content.addEventListener('input', () => {
     if(!textTitle.innerHTML.includes('<iconify-icon class="save-notice" icon="ic:twotone-data-saver-off"></iconify-icon>') && document.querySelector('.active')){
         textTitle.innerHTML += '<iconify-icon class="save-notice" icon="ic:twotone-data-saver-off"></iconify-icon>';
+    }
+});
+
+
+function resetFilesPopup(){
+    document.querySelector('.files-popup .selected span').textContent = 'Choose a file';
+    document.querySelector('.update-file-website').style.display = 'none';
+}
+
+
+async function openChooseFolder(){
+    const folderPath = await ipcRenderer.invoke("select-folder");
+    if(folderPath){
+        localStorage.setItem('saves-path', folderPath);
+        readDatabase();
+    }
+}
+
+async function setDefaultSavePath(){
+    localStorage.setItem('saves-path', null);
+    readDatabase();
+}
+
+
+const savesContainer = document.querySelector(".saves");
+
+function updateOrder(){
+    let newOrder = [...savesContainer.children].map(el => el.getAttribute("file-name"));
+    localStorage.setItem("save-order", JSON.stringify(newOrder));
+}
+
+new Sortable(savesContainer,{
+    animation: 150,
+    onEnd: () => {
+        updateOrder();
+    }
+});
+
+
+function sortSaves(){
+    let savedOrder = JSON.parse(localStorage.getItem("save-order")) || [];
+    if (savedOrder.length === 0) return;
+
+    let elements = Array.from(savesContainer.children);
+    elements.sort((a, b) => {
+        return savedOrder.indexOf(a.getAttribute("file-name")) - savedOrder.indexOf(b.getAttribute("file-name"));
+    });
+
+    elements.forEach((el, index) => {
+        savesContainer.insertBefore(el, savesContainer.children[index]);
+    });
+}
+
+
+function setCodeBlockUntouchable(){
+    document.querySelectorAll('.CodeMirror *').forEach(el => el.classList.add('untouchable'));
+}
+
+document.addEventListener('keydown', (e) => {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    const selectedNode = range.startContainer.parentElement;
+
+    if (selectedNode.classList.contains('untouchable')) {
+        e.preventDefault();
+    }
+});
+
+document.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('untouchable')) {
+        e.preventDefault();
     }
 });

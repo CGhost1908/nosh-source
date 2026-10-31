@@ -7,13 +7,79 @@
     <link rel="stylesheet" href="dark.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/dracula.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/roundSlider/1.3.2/roundslider.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <!-- codemirror -->
+    <link rel="stylesheet" href="src/code-theme/3024-day.css">
+    <link rel="stylesheet" href="src/code-theme/3024-night.css">
+    <link rel="stylesheet" href="src/code-theme/abbott.css">
+    <link rel="stylesheet" href="src/code-theme/abcdef.css">
+    <link rel="stylesheet" href="src/code-theme/ambiance.css">
+    <link rel="stylesheet" href="src/code-theme/ambiance-mobile.css">
+    <link rel="stylesheet" href="src/code-theme/ayu-dark.css">
+    <link rel="stylesheet" href="src/code-theme/ayu-mirage.css">
+    <link rel="stylesheet" href="src/code-theme/base16-dark.css">
+    <link rel="stylesheet" href="src/code-theme/base16-light.css">
+    <link rel="stylesheet" href="src/code-theme/bespin.css">
+    <link rel="stylesheet" href="src/code-theme/blackboard.css">
+    <link rel="stylesheet" href="src/code-theme/cobalt.css">
+    <link rel="stylesheet" href="src/code-theme/colorforth.css">
+    <link rel="stylesheet" href="src/code-theme/darcula.css">
+    <link rel="stylesheet" href="src/code-theme/dracula.css">
+    <link rel="stylesheet" href="src/code-theme/duotone-dark.css">
+    <link rel="stylesheet" href="src/code-theme/duotone-light.css">
+    <link rel="stylesheet" href="src/code-theme/eclipse.css">
+    <link rel="stylesheet" href="src/code-theme/elegant.css">
+    <link rel="stylesheet" href="src/code-theme/erlang-dark.css">
+    <link rel="stylesheet" href="src/code-theme/gruvbox-dark.css">
+    <link rel="stylesheet" href="src/code-theme/hopscotch.css">
+    <link rel="stylesheet" href="src/code-theme/icecoder.css">
+    <link rel="stylesheet" href="src/code-theme/idea.css">
+    <link rel="stylesheet" href="src/code-theme/isotope.css">
+    <link rel="stylesheet" href="src/code-theme/juejin.css">
+    <link rel="stylesheet" href="src/code-theme/lesser-dark.css">
+    <link rel="stylesheet" href="src/code-theme/liquibyte.css">
+    <link rel="stylesheet" href="src/code-theme/lucario.css">
+    <link rel="stylesheet" href="src/code-theme/material.css">
+    <link rel="stylesheet" href="src/code-theme/material-darker.css">
+    <link rel="stylesheet" href="src/code-theme/material-ocean.css">
+    <link rel="stylesheet" href="src/code-theme/material-palenight.css">
+    <link rel="stylesheet" href="src/code-theme/mbo.css">
+    <link rel="stylesheet" href="src/code-theme/mdn-like.css">
+    <link rel="stylesheet" href="src/code-theme/midnight.css">
+    <link rel="stylesheet" href="src/code-theme/monokai.css">
+    <link rel="stylesheet" href="src/code-theme/moxer.css">
+    <link rel="stylesheet" href="src/code-theme/neat.css">
+    <link rel="stylesheet" href="src/code-theme/neo.css">
+    <link rel="stylesheet" href="src/code-theme/night.css">
+    <link rel="stylesheet" href="src/code-theme/nord.css">
+    <link rel="stylesheet" href="src/code-theme/oceanic-next.css">
+    <link rel="stylesheet" href="src/code-theme/panda-syntax.css">
+    <link rel="stylesheet" href="src/code-theme/paraiso-dark.css">
+    <link rel="stylesheet" href="src/code-theme/paraiso-light.css">
+    <link rel="stylesheet" href="src/code-theme/pastel-on-dark.css">
+    <link rel="stylesheet" href="src/code-theme/railscasts.css">
+    <link rel="stylesheet" href="src/code-theme/rubyblue.css">
+    <link rel="stylesheet" href="src/code-theme/seti.css">
+    <link rel="stylesheet" href="src/code-theme/shadowfox.css">
+    <link rel="stylesheet" href="src/code-theme/solarized.css">
+    <link rel="stylesheet" href="src/code-theme/ssms.css">
+    <link rel="stylesheet" href="src/code-theme/the-matrix.css">
+    <link rel="stylesheet" href="src/code-theme/tomorrow-night-bright.css">
+    <link rel="stylesheet" href="src/code-theme/tomorrow-night-eighties.css">
+    <link rel="stylesheet" href="src/code-theme/ttcn.css">
+    <link rel="stylesheet" href="src/code-theme/twilight.css">
+    <link rel="stylesheet" href="src/code-theme/vibrant-ink.css">
+    <link rel="stylesheet" href="src/code-theme/xq-dark.css">
+    <link rel="stylesheet" href="src/code-theme/xq-light.css">
+    <link rel="stylesheet" href="src/code-theme/yeti.css">
+    <link rel="stylesheet" href="src/code-theme/yonce.css">
+    <link rel="stylesheet" href="src/code-theme/zenburn.css">
 </head>
 <body>
     <style class="font-size">
-        span, p{
+        #content span, #content p{
             font-size: 16px;
             line-height: 16px;
         }
@@ -32,63 +98,135 @@
           <li id="option2">Rename</li>
           <li id="option3">Open File Path</li>
         </ul>
-      </div>    
+    </div>
+    <div class="copied-notification">Copied.</div>
     <div class="container">
-        <div class="popup-section">
-            <div class="settings popup">
-                <label class="default-font-size settings-property" for="">
-                    <p>
-                        Default Font Size: 
-                    </p>
-                    <div style="display: flex; flex-direction: row; margin-right: 12.5px;">
-                        <input type="number" id="default-font-size-input" maxlength="2">
-                        <p style="margin-left: -30px;">px</p>
-                    </div>
-                </label>
-                <label for="" class="auto-save settings-property">
-                    <p>Auto Save</p>
-                    <label class="switch">
-                        <input type="checkbox" class="settings-checkbox" id="auto-save-checkbox">
-                        <div class="slider round"></div>
-                    </label>
-                </label>
-                <label class="spotify-label settings-property" for="">
-                    <button class="spotify-button" onclick="connectSpotify(false)"><iconify-icon icon="mdi:spotify"></iconify-icon> Connect Spotify</button>
-                    <h1 class="spotify-connected"><div style="display: flex; align-items: center;"><iconify-icon icon="mdi:tick-circle"></iconify-icon>Spotify account linked.</div><button class="spotify-unlink" onclick="unlinkSpotify()">Unlink</button></h1>
-                </label>
-                <label for="" class="spotify-player-setting settings-property">
-                    <span>View Spotify Player</span>
-                    <label class="switch">
-                        <input type="checkbox" class="settings-checkbox" id="spotify-checkbox">
-                        <div class="slider round"></div>
-                    </label>
-                </label>
-                <label class="google-drive-label settings-property" for="">
-                    <button class="link-drive-button" onclick="linkDrive()"><iconify-icon icon="logos:google-drive"></iconify-icon> Link Google Drive</button>
-                    <h1 class="drive-connected"><div style="display: flex; align-items: center;"><iconify-icon icon="mdi:tick-circle"></iconify-icon>Google Drive account linked.</div><button class="drive-unlink" onclick="unlinkDrive()">Unlink</button></h1>
-                </label>
-                <label class="settings-property import-drive-label" for="">
-                    <span>Import missing files from Google Drive.</span>
-                    <button onclick="checkNonExistFilesDrive()" class="import-drive-button">Import</button>
-                    <div class="importing-popup">
-                        <nav class="success-nav-drive">
-                            <span>Imported</span>
-                            <span style="color: green;" class="imported-file-number">0</span>
-                            <span style="margin-right: 20px;">file</span>
-                        </nav>
-                        <nav class="error-nav-drive">
-                            <span>Error occured in </span>
-                            <span style="color: red;" class="not-imported-file-number">0</span>
-                            <span>file</span>
-                        </nav>
-                    </div>
-                </label>
-                <button onclick="setSettings()" class="apply">Apply</button>
+
+        <div class="settings">
+            <div class="settings-categories">
+                <button onclick="openSettingCategory('general')" class="settings-general settings-active-button">General</button>
+                <button onclick="openSettingCategory('apps')" class="settings-apps">Apps</button>
+                <button onclick="openSettingCategory('code-block')" class="settings-code-block">Code Blocks</button>
+                <button onclick="openSettingCategory('published-files')" class="settings-published-files">Published Files</button>
             </div>
-            <div class="drive-saves-popup popup">
-                <h3>0 files found.</h3>
-                <nav class="select-files"></nav>
-                <button onclick="exitDriveFilesPopup()">Exit</button>
+            <div class="settings-props">
+                <div class="settings-panel general-settings">
+                    <h1 style="width: 100%; text-align: start; color: #fff; margin: 10px 0 10px 30px;">General Settings</h1>
+                    <label class="default-font-size settings-property" for="">
+                        <p>
+                            Default Font Size: 
+                        </p>
+                        <div style="display: flex; flex-direction: row; margin-right: 12.5px;">
+                            <input type="number" id="default-font-size-input" maxlength="2">
+                            <p style="margin-left: -30px;">px</p>
+                        </div>
+                    </label>
+                    <label for="" class="auto-save settings-property">
+                        <p>Auto Save</p>
+                        <label class="switch">
+                            <input type="checkbox" class="settings-checkbox" id="auto-save-checkbox">
+                            <div class="slider round"></div>
+                        </label>
+                    </label>
+                    <label for="" class="save-path settings-property">
+                        <p>Save Path</p>
+                        <nav style="display: flex; flex-direction: row; align-items: center;">
+                            <input type="text" class="settings-input" id="save-path-input" onclick="openChooseFolder()" readonly>
+                            <button class="set-default-path" onclick="setDefaultSavePath()"><iconify-icon icon="material-symbols-light:disabled-by-default"></iconify-icon></button>
+                        </nav>
+                    </label>
+                    <nav class="settings-button-nav">
+                        <button onclick="closeSettings()" class="close-settings">Close</button>
+                        <button onclick="setSettings()" class="apply">Apply</button>
+                    </nav>
+                </div>
+                <div class="settings-panel apps-settings">
+                    <h1 style="width: 100%; text-align: start; color: #fff; margin: 10px 0 10px 30px;">App Settings</h1>
+                    <div class="drive-saves">
+                        <h3>0 files found.</h3>
+                        <nav class="select-files"></nav>
+                        <button onclick="exitDriveFilesPopup()">Exit</button>
+                    </div>
+                    <label class="spotify-label settings-property" for="">
+                        <button class="spotify-button" onclick="connectSpotify(false)"><iconify-icon icon="mdi:spotify"></iconify-icon> Connect Spotify</button>
+                        <h1 class="spotify-connected"><div style="display: flex; align-items: center;"><iconify-icon icon="mdi:tick-circle"></iconify-icon>Spotify account linked.</div><button class="spotify-unlink" onclick="unlinkSpotify()">Unlink</button></h1>
+                    </label>
+                    <label for="" class="spotify-player-setting settings-property">
+                        <span>View Spotify Player</span>
+                        <label class="switch">
+                            <input type="checkbox" class="settings-checkbox" id="spotify-checkbox">
+                            <div class="slider round"></div>
+                        </label>
+                    </label>
+                    <label class="google-drive-label settings-property" for="">
+                        <button class="link-drive-button" onclick="linkDrive()"><iconify-icon icon="logos:google-drive"></iconify-icon> Link Google Drive</button>
+                        <h1 class="drive-connected"><div style="display: flex; align-items: center;"><iconify-icon icon="mdi:tick-circle"></iconify-icon>Google Drive account linked.</div><button class="drive-unlink" onclick="unlinkDrive()">Unlink</button></h1>
+                    </label>
+                    <label class="settings-property import-drive-label" for="">
+                        <span>Import missing files from Google Drive.</span>
+                        <button onclick="checkNonExistFilesDrive()" class="import-drive-button">Import</button>
+                        <div class="importing-popup">
+                            <nav class="success-nav-drive">
+                                <span>Imported</span>
+                                <span style="color: green;" class="imported-file-number">0</span>
+                                <span style="margin-right: 20px;">file</span>
+                            </nav>
+                            <nav class="error-nav-drive">
+                                <span>Error occured in </span>
+                                <span style="color: red;" class="not-imported-file-number">0</span>
+                                <span>file</span>
+                            </nav>
+                        </div>
+                    </label>
+                    <nav class="settings-button-nav">
+                        <button onclick="closeSettings()" class="close-settings">Close</button>
+                        <button onclick="setSettings()" class="apply">Apply</button>
+                    </nav>
+                </div>
+                <div class="settings-panel published-files-settings">
+                    <h1>Published Files <iconify-icon icon="tabler:refresh" onclick="showPublishedFiles()"></iconify-icon></h1>
+                    <div class="published-files-container"></div>
+                    <div class="published-files-busy"><iconify-icon icon="line-md:loading-loop"></iconify-icon></div>
+                    <nav class="settings-button-nav">
+                        <button onclick="closeSettings()" class="close-settings">Close</button>
+                        <button onclick="setSettings()" class="apply">Apply</button>
+                    </nav>
+                </div>
+                <div class="settings-panel code-block-settings">
+                    <h1>Code Block Settings</h1>
+                    <div class="code-block-theme settings-property"><p>Theme</p></div>
+                    <div class="code-block-themes settings-property"></div>
+                    <nav class="settings-button-nav">
+                        <button onclick="closeSettings()" class="close-settings">Close</button>
+                        <button onclick="setSettings()" class="apply">Apply</button>
+                    </nav>
+                    <div style="min-height: 225px;"></div>
+                    <div id="example-code-block">
+                        <button style="display: none;" onclick="closeExampleCodeBlock()"><iconify-icon icon="lets-icons:close-ring"></iconify-icon></button>
+                        <iconify-icon class="open-example-code-block" icon="mingcute:up-fill"></iconify-icon>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="popup-section">
+            <div class="files-popup popup">
+                <div class="files-popup-loading">
+                    <iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon>
+                </div>
+                <div class="files-popup-success" onclick="closeOverlay()">
+                    <iconify-icon icon="mdi:file-tick"></iconify-icon>
+                    <h3>File saved.</h3>
+                    <p>Updating the website content may take a few minutes.</p>
+                </div>
+                <h1>Choose a file.</h1>
+                <div>
+                    <h3 class="selected">
+                        <span>Choose a file</span>
+                        <span class="select-arrow">▼</span>
+                    </h3>
+                    <ul></ul>
+                </div>
+                <button class="update-file-website">Update</button>
             </div>
             <div class="language-popup popup">
                 <input class="search-language" type="text" placeholder="Search language" oninput="searchLanguage()">
@@ -118,6 +256,7 @@
                     <button value="sql" onclick="createCodeBlock(this.value)" class="language">SQL</button>
                 </div>
             </div>
+            <div class="overlay" onclick="closeOverlay()"></div>
             <div class="add-link-popup popup">
                 <span>Enter Link</span>
                 <input class="link-input" type="">
@@ -153,7 +292,20 @@
                     </nav>
                 </div>
             </div>
-            <div class="overlay" onclick="closeOverlay()"></div>
+            <div class="github-uploaded-popup popup">
+                <div>
+                    <input type="text" class="share-link-input" readonly>
+                    <p>It may take a minute for the site to open.</p>
+                </div>
+            </div>
+            <div class="share-confirm-popup popup">
+                <h3>Everyone will be able to see your file after you publish it.</h3>
+                <h3>Are you sure?</h3>
+                <nav>
+                    <button onclick="closeOverlay()">Cancel</button>
+                    <button class="confirm-publish" onclick="publishFile()">Publish</button>
+                </nav>
+            </div>
         </div>
         <div class="left-side">
             <nav class="organizer1">
@@ -170,12 +322,12 @@
                 <nav class="organizer3">
                     <label for="search-checkbox" class="trio trio-hover search">
                         <iconify-icon icon="ic:round-search"></iconify-icon>
-                        <input class="search-checkbox" id="search-checkbox" type="checkbox" >
+                        <input class="search-checkbox" id="search-checkbox" type="checkbox">
                     </label>
                     <input class="search-input" type="text">
                     <button class="trio trio-hover settings-button"><iconify-icon icon="solar:settings-bold"></iconify-icon></button>
                 </nav>
-                <button onclick="refreshDatabase(document.querySelector('.active')?.getAttribute('file-name') || undefined)" class="trio trio-hover refresh"><iconify-icon icon="ic:round-refresh"></iconify-icon></button>
+                <button onclick="readDatabase(document.querySelector('.active')?.getAttribute('file-name') || undefined)" class="trio trio-hover refresh"><iconify-icon icon="ic:round-refresh"></iconify-icon></button>
             </nav>
             <div class="saves"></div>
             <div class="spotify">
@@ -194,7 +346,6 @@
                 </div>
                 <div class="spotify-volume">
                     <div id="slider" class="rslider"></div>
-                    <!-- <div class="volume-input"></div> -->
                 </div>
             </div>
         </div>
@@ -206,37 +357,10 @@
                 <button onclick="closeWindow()" class="close"><iconify-icon icon="ic:round-close"></iconify-icon></button>
             </div>
             <div id="inner" class="inner dark-inner">
+                <!-- <div class="bottom">
+                    <object class="motorcycle" type="image/svg+xml" data="src/emojione_motorcycle.svg"></object>
+                </div> -->
                 <div class="toolbar">
-                    <!-- <select class="toolbar-dropdown" onchange="fileHandle(this.value); this.selectedIndex=0">
-                        <option value="" selected="" hidden="" disabled="">File</option>
-                        <option value="new">New file</option>
-                        <option value="open">Open file</option>
-                        <option value="save">Save</option>
-                        <option value="save-as">Save as</option>
-                        <option value="pdf">Save as pdf</option>
-                    </select>
-                    <p style="color: #fff; font-size: 18px;">|</p>
-                    <select class="toolbar-dropdown" onchange="formatDoc('formatBlock', this.value); this.selectedIndex=0">
-                        <option value="" selected="" hidden="" disabled="">Format</option>
-                        <option value="h1">Heading1</option>
-                        <option value="h2">Heading2</option>
-                        <option value="h3">Heading3</option>
-                        <option value="h4">Heading4</option>
-                        <option value="h5">Heading5</option>
-                        <option value="h6">Heading6</option>
-                        <option value="p">Paragraph</option>
-                    </select>
-                    <select class="toolbar-dropdown" onchange="formatDoc('fontSize', this.value); this.selectedIndex=0">
-                        <option value="" selected="" hidden="" disabled="">Font size</option>
-                        <option value="1">Extra small</option>
-                        <option value="2">Small</option>
-                        <option value="3">Regular</option>
-                        <option value="4">Medium</option>
-                        <option value="5">Large</option>
-                        <option value="6">Extra large</option>
-                        <option value="7">Big</option>
-                    </select> -->
-
                     <div class="toolbar-dropdown">
                         <div class="dropdown-header">File</div>
                         <ul class="dropdown-list" onclick="closeDropdown(this);">
@@ -291,7 +415,8 @@
                         <iconify-icon id="drive-enable-icon" icon="iconoir:google-drive-check"></iconify-icon>
                         <iconify-icon class="visible" id="drive-disable-icon" icon="iconoir:google-drive-sync"></iconify-icon>
                     </label>
-                    <button onclick="removePopup()" class="quad trash"><i class='bx bx-sm bx-trash'></i></button>
+                    <button class="quad share disabled" id="share-file"><iconify-icon icon="mdi:web-plus"></iconify-icon></button>
+                    <button onclick="removePopup()" class="quad trash disabled"><iconify-icon icon="fa-regular:trash-alt"></iconify-icon></button>
                     <div class="btn-toolbar">
                         <button onclick="formatDoc('undo')" class="toolbar-btn"><i class='bx bx-sm bx-undo' ></i></button>
                         <button onclick="formatDoc('redo')" class="toolbar-btn"><i class='bx bx-sm bx-redo' ></i></button>
@@ -332,20 +457,10 @@
 </body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<!-- highlight.js -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
-<script>hljs.highlightAll()</script>
 
 <!-- prism.js -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.js"></script>
-
-<!-- CodeMirror -->
-<!-- <link rel="stylesheet" href="node_modules/codemirror/lib/codemirror.css">
-<link rel="stylesheet" href="node_modules/codemirror/theme/dracula.css"> -->
-
 
 <!-- ace editor -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
@@ -373,6 +488,7 @@
 <script src="imageVideo.js"></script>
 <script src="search.js"></script>
 <script src="spotify.js"></script>
+<script src="share.js"></script>
 </html>
 
 

@@ -1,37 +1,55 @@
+const { localservices } = require("googleapis/build/src/apis/localservices");
 
 async function invokeSavesDir(){
-    savesDir = await ipcRenderer.invoke('get-save-path');
+    if(localStorage.getItem('saves-path') && localStorage.getItem('saves-path') !== 'null'){
+        savesDir = localStorage.getItem('saves-path');
+    }else{
+        savesDir = await ipcRenderer.invoke('get-save-path');
+        localStorage.setItem('saves-path', savesDir);
+    }
+    
+    document.querySelector('#save-path-input').value = savesDir;
 }
 
-async function readDatabase(fileName){
+async function readDatabase(file){
     
     await invokeSavesDir();
 
     const files = await fsPromises.readdir(savesDir);
     const nshFiles = files.filter(file => path.extname(file) === '.nsh');
 
+    document.querySelectorAll('.exist-file').forEach(file => file.classList.remove('exist-file'));
+
     for(const file of nshFiles){
         const filePath = path.join(savesDir, file);
-        try{
+        try {
             const data = await fsPromises.readFile(filePath, 'utf8');
-            createElement(file);
-        }catch (err){
-            console.error('Dosya okuma hatası:', err);
+            if(document.querySelector(`[file-name="${file.slice(0, -4)}"]`)){
+                document.querySelector(`[file-name="${file.slice(0, -4)}"]`).classList.add('exist-file');
+            }else{
+                createElement(file);
+            }
+        }catch(err){
+            console.error(err);
         }
     }
-    // sortSaves();
 
-    if(document.querySelector(`[file-name='${fileName}']`)){
-        document.querySelector(`[file-name='${fileName}']`).classList.add('active');
-    }else{
-        //CHANGE HERE IN EVERY PATCH
-        content.innerHTML = home;
-        document.querySelector('.text-title').textContent = '';
-    }
+    sortSaves();
+    deleteNonExistFiles();
 
     if(localStorage.getItem('google_drive_access_token') && localStorage.getItem('google_drive_access_token') !== 'null'){
         await getNoshFilesFromDrive();
     }
+}
+
+
+function deleteNonExistFiles(){
+    const saves = document.querySelectorAll('.save');
+    saves.forEach(save => {
+        if(!save.classList.contains('exist-file')){
+            save.remove();
+        }
+    });
 }
 
 function createElement(file, isDriveFile){
@@ -43,6 +61,7 @@ function createElement(file, isDriveFile){
     const createSave = document.createElement('p');
     createSave.id = `save${saves.length+1}`;
     createSave.classList.add('save');
+    createSave.classList.add('exist-file');
     createSave.classList.add('text-overflow');
     createSave.setAttribute('file-name', fileName);
     createSave.textContent = fileName;
@@ -56,23 +75,6 @@ function createElement(file, isDriveFile){
 
 //START PROGRAM
 readDatabase();
-
-
-function refreshDatabase(fileName){
-
-    // document.getElementById('content').innerHTML = '';
-    // document.querySelector('.text-title').textContent = '';
-    // const title = document.querySelector('.text-title').textContent;
-    // const save = document.querySelector(`[file-name="${title}"]`);
-    // save.classList.add('active');
-    
-    const allSaves = document.querySelectorAll('.save');
-    allSaves.forEach(save => {
-        save.remove();
-    });
-
-    readDatabase(fileName);
-}
 
 
 function refreshElement(file){
@@ -93,23 +95,25 @@ function refreshElement(file){
 
 
 
-function deleteSave(saveName){
+async function deleteSave(saveName) {
     if(saveName){
         const filePath = `${savesDir}/${saveName}.nsh`;
-        fs.unlink(filePath, (err) => {});
-        refreshDatabase(document.querySelector('.active')?.getAttribute('file-name') || undefined);
+        try{
+            await fsPromises.unlink(filePath);
+
+            await document.querySelector(`[file-name="${saveName}"]`).remove();
+
+            if(!document.querySelector(`.active`)){
+                console.log('dosya yok');
+                content.innerHTML = home;
+                checkTitle();
+            }
+        }catch(err){
+            console.error("Error deleting file:", err);
+        }
     }
-    // }else{
-    //     if(document.querySelector('.active')){
-    //         const filePath = `${savesDir}/${document.querySelector('.active').getAttribute('file-name')}.nsh`;
-    //         fs.unlink(filePath, (err) => {});
-    //         refreshDatabase(document.querySelector('.active')?.getAttribute('file-name') || undefined);
-    //     }else{
-    //         document.getElementById('content').innerHTML = '';
-    //         document.querySelectorAll('.save').forEach(btn => btn.classList.remove('active'));
-    //     }
-    // }
 }
+
 
 const removeRange = document.querySelector('.remove-range');
 removeRange.addEventListener('change', function(){
@@ -194,8 +198,7 @@ function endRename(saveName){
     }
 }
 
-async function sortSaves(){
-    console.log('Sıralama yapılıyor...');
+async function sortSavesDate(){
 
     const savesElement = document.querySelector('.saves');
     const itemsArray = Array.from(savesElement.children);

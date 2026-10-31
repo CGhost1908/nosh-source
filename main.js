@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, MenuItem, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -12,6 +12,10 @@ const querystring = require('querystring');
 const appServer = express();
 const { google } = require("googleapis");
 const url = require("url");
+const { autoUpdater } = require('electron-updater');
+
+app.disableHardwareAcceleration();
+
 const port = 2222;
 
 let loadingWindow;
@@ -19,8 +23,9 @@ let win;
 
 function createWindow() {
     loadingWindow = new BrowserWindow({
-        width: 1000,
-        height: 680,
+        icon: path.join(__dirname, 'icon.ico'),
+        width: 480,
+        height: 280,
         frame: false,
         autoHideMenuBar: true,
         alwaysOnTop: true,
@@ -32,7 +37,9 @@ function createWindow() {
     win = new BrowserWindow({
         icon: path.join(__dirname, 'icon.ico'),
         webSecurity: false,
-        minWidth: 1000,
+        width: 1080,
+        height: 680,
+        minWidth: 1080,
         minHeight: 680,
         autoHideMenuBar: true,
         frame: false,
@@ -42,14 +49,27 @@ function createWindow() {
             contextIsolation: false,
             enableRemoteModule: true,
             plugins: true,
+            webviewTag: true,
         },
     });
 
     win.loadFile('index.html');
 
     win.webContents.on('did-finish-load', () => {
-        loadingWindow.close();
         win.show();
+        win.focus();
+        if (loadingWindow && !loadingWindow.isDestroyed()) {
+            loadingWindow.close();
+        }
+    });
+
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Failed to load index.html:', errorCode, errorDescription);
+        win.show();
+        win.focus();
+        if (loadingWindow && !loadingWindow.isDestroyed()) {
+            loadingWindow.close();
+        }
     });
 
     ipcMain.on('minimize', () => {
@@ -85,8 +105,8 @@ function createWindow() {
             return res.send('Authorization failed.');
         }
 
-        const clientId = '';
-        const clientSecret = '';
+        const clientId = process.env.SPOTIFY_CLIENT_ID || '';
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '';
         const redirectUri = `http://localhost:${port}/callback`;
 
         const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
@@ -165,7 +185,7 @@ function createWindow() {
     const oAuth2Client = new google.auth.OAuth2(
         "",
         "",
-        `http://localhost:${port}/drive-callback`
+        "http://localhost:2222/drive-callback"
     );
 
     appServer.get("/drive-callback", (req, res) => {
@@ -239,7 +259,7 @@ function createWindow() {
                 fields: "files(id, name)",
             }, (err, response) => {
                 if(err){
-                    console.log("Folder couldnt create: " + err);
+                    console.log("Folder could not create: " + err);
                     return;
                 }
         
@@ -326,6 +346,45 @@ function createWindow() {
     });
 
 
+    //github
+    const token = process.env.GITHUB_TOKEN || '';
+    const repoOwner = 'cghost1908';
+    const repoName = 'nosh';
+
+    ipcMain.on('upload-to-github', async (event, data) => {
+        const { fileContent, randomID } = data;
+    
+        const encodedContent = Buffer.from(fileContent).toString('base64');
+    
+        const filePath = `uploads/${randomID}.html`;
+    
+        const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${filePath}`;
+    
+        try {
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                },
+                body: JSON.stringify({
+                    message: `Add ${randomID}.html`,
+                    content: encodedContent,
+                }),
+            });
+    
+            if(response.ok){
+                event.sender.send('github-upload-response',{ 
+                    success: true,
+                    randomID: randomID
+                });
+            }
+        } catch (error){
+            console.error('An error occurred while uploading the file:', error);
+            console.log('upload-response', { success: false, message: 'An error occurred during the upload' });
+        }
+    });
+
     //server
     appServer.listen(port, () => {
         console.log(`Server running at http://localhost:${port}`);
@@ -341,7 +400,9 @@ function createWindow() {
     });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
@@ -379,8 +440,24 @@ ipcMain.handle('save-file', async (event, data) => {
 });
 
 
-const savesDir = path.join(app.getPath('userData'), 'Saves');
+let savesDir;
+
 ipcMain.handle('get-save-path', () => {
+    let platform = process.platform;
+ 
+    if (platform === 'win32') {
+        savesDir = path.join(app.getPath('userData'), 'Saves');
+    }else if (platform === 'darwin') {
+        savesDir = path.join(app.getPath('userData'), 'Saves');
+    }else if(platform === 'linux') {
+        savesDir = path.join(app.getPath('userData'), 'Saves');
+    }
+
+    const fs = require('fs');
+    if (!fs.existsSync(savesDir)) {
+        fs.mkdirSync(savesDir);
+    }
+
     return savesDir;
 });
 
@@ -400,16 +477,14 @@ app.on('ready', () => {
 });
 
 
-ipcMain.on('create-file', (event, fileName, content) => {
-    const filePath = `${saveFolder}/${fileName}`;
-
-    fs.writeFile(filePath, content, (err) => {
-        if (err) {
-            event.reply('file-created', 'Error creating file');
-        } else {
-            event.reply('file-created', `File "${fileName}" created successfully at ${filePath}`);
-        }
-    });
+ipcMain.handle('create-file', async (event, fileName, content) => {
+    try {
+        const filePath = path.join(saveFolder, fileName);
+        fs.writeFileSync(filePath, content, 'utf8');
+        return { success: true, message: `File "${fileName}" created successfully at ${filePath}` };
+    } catch (error) {
+        return { success: false, message: `Error creating file: ${error.message}` };
+    }
 });
 
 
@@ -429,5 +504,20 @@ function startServer() {
       console.log(`Server process exited with code ${code}`);
     });
 }
+
+
+//save path 
+ipcMain.handle("select-folder", async () => {
+    const result = await dialog.showOpenDialog({
+        title: "Select folder",
+        properties: ["openDirectory"],
+    });
+
+    return result.filePaths[0] || null;
+});
+
+
+//updater
+//const feedURL = 'https://github.com/cghost1908/nosh/releases/latest/download/nosh1.3.3.exe';
 
 

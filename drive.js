@@ -3,7 +3,7 @@ const { file } = require("googleapis/build/src/apis/file");
 
 const driveClientId = "";
 const driveClientSecret = "";
-const driveCallback = "";
+const driveCallback = "http://localhost:2222/drive-callback";
 
 
 function linkDrive(){
@@ -210,6 +210,7 @@ async function openFileFromDrive(filename){
     }
 }
 
+const driveCheckbox = document.querySelector('.save-drive-checkbox');
 
 driveCheckbox.addEventListener('change',function(){
     checkDriveCheckbox();
@@ -264,8 +265,7 @@ async function cancelDrive(){
 
 
 async function checkNonExistFilesDrive(){
-    document.querySelector('.drive-saves-popup').style.opacity = '1';
-    document.querySelector('.drive-saves-popup').style.pointerEvents = 'all';
+    document.querySelector('.drive-saves').style.display = 'flex';
 
     const oAuth2Client = new google.auth.OAuth2(driveClientId, driveClientSecret);
     const drive = google.drive({ version: 'v3', auth: oAuth2Client });
@@ -327,7 +327,7 @@ async function checkNonExistFilesDrive(){
                 fileCount++;
             }
         }
-        document.querySelector('.drive-saves-popup h3').textContent = `${fileCount} files found.`;
+        document.querySelector('.drive-saves h3').textContent = `${fileCount} files found.`;
 
         
     }catch (err){
@@ -364,7 +364,7 @@ async function importFileFromDrive(fileName){
     
         fs.writeFileSync(filePath, fileData);
 
-        await refreshDatabase();
+        await readDatabase();
 
         checkNonExistFilesDrive();
 
@@ -378,7 +378,7 @@ async function refreshDriveToken(){
     const oAuth2Client = new google.auth.OAuth2(
         driveClientId,
         driveClientSecret,
-        driveCallback
+        'http://localhost:2222/drive-callback'
     );
     
     oAuth2Client.setCredentials({
@@ -389,7 +389,7 @@ async function refreshDriveToken(){
         const newTokens = await oAuth2Client.getAccessToken();
         const accessToken = newTokens.token;
 
-        refreshDatabase();
+        readDatabase();
         localStorage.setItem('google_drive_access_token', accessToken);
     } catch (error) {
         console.error(error);
@@ -449,7 +449,7 @@ async function deleteFileFromDrive(fileName){
             fileId: fileId,
         });
     
-        await refreshDatabase();
+        await readDatabase();
 
         checkNonExistFilesDrive();
 
