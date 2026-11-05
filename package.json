@@ -2,6 +2,7 @@
   "name": "nosh",
   "version": "1.4.0",
   "description": "High-craft note & code workstation for developers and thinkers",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
