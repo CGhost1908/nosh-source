@@ -1,4 +1,4 @@
-﻿// Shared helpers for the end-to-end tests (real Electron driven by Playwright).
+// Shared helpers for the end-to-end tests (real Electron driven by Playwright).
 //
 // Every test runs against a throwaway --user-data-dir and notes folder, so a developer's real
 // Nosh data is never touched. launchNosh() refuses to continue if the profile is not isolated.
