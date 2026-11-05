@@ -2,8 +2,10 @@
   "name": "nosh",
   "version": "1.4.0",
   "description": "High-craft note & code workstation for developers and thinkers",
-  "license": "MIT",
   "main": "main.js",
+  "license": "MIT",
+  "author": "CGhost1908",
+  "repository": "https://github.com/CGhost1908/nosh-source",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
@@ -15,6 +17,8 @@
   "build": {
     "icon": "icon.ico",
     "appId": "com.myapp.desktop",
+    "productName": "Nosh",
+    "copyright": "Copyright (c) 2025 CGhost1908 and Nosh contributors",
     "files": [
       "**/*",
       "!**/.env*",
@@ -27,7 +31,9 @@
       "!scripts/**",
       "!*.md",
       "!start.bat",
-      "!src/*.psd"
+      "!src/*.psd",
+      "!installer/**",
+      "!.github/**"
     ],
     "mac": {
       "target": [
@@ -38,6 +44,15 @@
     },
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "installer/license.txt",
+      "artifactName": "Nosh-Setup-${version}.${ext}",
+      "uninstallDisplayName": "Nosh",
+      "shortcutName": "Nosh"
     },
     "linux": {
       "target": "AppImage"

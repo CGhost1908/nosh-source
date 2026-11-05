@@ -91,6 +91,25 @@ Nosh values user privacy. For information on how authentication tokens and note 
 
 ---
 
+## 🔏 Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
+
+Windows installers are built from this repository's source by the [Release workflow](.github/workflows/release.yml) on GitHub Actions and signed only after manual approval.
+
+**Team roles**
+
+- Committers and reviewers: [CGhost1908](https://github.com/CGhost1908)
+- Approvers: [CGhost1908](https://github.com/CGhost1908)
+
+All contributions from people outside the team (pull requests) are reviewed by a committer before they are merged.
+
+**Privacy policy**
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Optional features that do connect to other systems (Google Drive sync, public note sharing via Supabase) are described in the [Privacy Policy](privacy-policy.md), which is also shown during installation.
+
+---
+
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
