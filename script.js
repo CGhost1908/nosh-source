@@ -140,6 +140,10 @@ async function saveFile() {
     const contentHTML = getCleanContentHTML();
 
     try {
+        // Keep the version that is about to be overwritten (never blocks or fails the save)
+        if (typeof captureHistoryBeforeSave === 'function') {
+            await captureHistoryBeforeSave(safeName, filePath, contentHTML);
+        }
         await fsPromises.writeFile(filePath, contentHTML, 'utf8');
 
         hasUnsavedChanges = false;

@@ -639,6 +639,9 @@ async function showWelcomeDashboard() {
     const shareBtn = document.getElementById('share-file');
     if (shareBtn) shareBtn.style.display = 'none';
 
+    const historyBtn = document.getElementById('history-btn');
+    if (historyBtn) historyBtn.style.display = 'none';
+
     if (typeof updatePublishButtonState === 'function') {
         updatePublishButtonState();
     }
@@ -711,6 +714,9 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false) {
 
         const shareBtn = document.getElementById('share-file');
         if (shareBtn) shareBtn.style.display = 'inline-flex';
+
+        const historyBtn = document.getElementById('history-btn');
+        if (historyBtn) historyBtn.style.display = 'inline-flex';
 
         // Check Drive Sync UI for this note
         updateDriveSyncButtonState(activeItem?.classList.contains('drive-save'));
@@ -801,6 +807,9 @@ async function deleteSave(noteName, permanent = false) {
         if (permanent) {
             if (fs.existsSync(filePath)) {
                 await fsPromises.unlink(filePath);
+            }
+            if (typeof deleteNoteHistory === 'function') {
+                await deleteNoteHistory(safeName);
             }
             showToast(`Permanently deleted "${safeName}"`, 'info');
         } else {
@@ -895,6 +904,9 @@ async function emptyTrash() {
         let count = 0;
         for (const file of files) {
             await fsPromises.unlink(path.join(trashDir, file));
+            if (typeof deleteNoteHistory === 'function' && file.endsWith('.nsh')) {
+                await deleteNoteHistory(path.basename(file, '.nsh'));
+            }
             count++;
         }
         showToast(`Emptied trash (${count} note${count === 1 ? '' : 's'} removed)`, 'info');
@@ -1248,6 +1260,10 @@ async function renameSave(oldName, newName) {
 
     try {
         await fsPromises.rename(oldFilePath, newFilePath);
+
+        if (typeof renameNoteHistory === 'function') {
+            await renameNoteHistory(path.basename(oldName), sanitizedNewName);
+        }
 
         if (typeof removeNoteFromSearchCache === 'function') {
             removeNoteFromSearchCache(oldName);
