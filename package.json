@@ -39,37 +39,15 @@
     }
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.18.1",
-    "@codemirror/basic-setup": "^0.20.0",
-    "@codemirror/lang-javascript": "^6.2.2",
-    "@codemirror/state": "^6.4.1",
-    "@codemirror/view": "^6.34.1",
-    "@supabase/supabase-js": "^2.118.0",
-    "axios": "^1.7.9",
-    "body-parser": "^1.20.3",
     "codemirror": "^5.65.18",
-    "cors": "^2.8.5",
-    "drm": "^1.0.1",
-    "electron-updater": "^6.3.9",
     "express": "^4.21.2",
-    "express-session": "^1.18.1",
     "googleapis": "^144.0.0",
     "highlight.js": "^11.10.0",
-    "interactjs": "^1.10.27",
-    "jquery": "^3.7.1",
-    "lunr": "^2.3.9",
-    "node-fetch": "^2.7.0",
-    "pipe": "^1.1.0",
-    "querystring": "^0.2.1",
-    "squirrel": "^1.0.0",
-    "thememirror": "^2.0.1",
-    "vue": "^3.5.13",
-    "vue-round-slider": "^1.0.1"
+    "interactjs": "^1.10.27"
   },
   "devDependencies": {
     "electron": "^40.4.1",
     "electron-builder": "^26.7.0",
-    "electron-packager": "^17.1.2",
     "playwright": "^1.64.1"
   }
 }
