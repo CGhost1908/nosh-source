@@ -39,8 +39,12 @@ try {
 
 const port = 2222;
 
+const noshTray = require('./tray');
+
 let loadingWindow;
 let win;
+let quitIntent = false;       // set by the tray's "Quit Nosh" right before closing the window
+let pendingCloseIsQuit = false;
 let savesDir;
 let saveFolder;
 let pendingNshFile = null;
@@ -198,6 +202,9 @@ function createWindow() {
 
     win.on('close', async (event) => {
         event.preventDefault();
+        // Remember whether this close attempt is a real quit; a cancelled prompt must not leave it set
+        pendingCloseIsQuit = quitIntent;
+        quitIntent = false;
         if (win && !win.isDestroyed()) {
             win.webContents.send('confirm-close');
         }
@@ -232,10 +239,41 @@ ipcMain.on('close', () => {
 });
 
 ipcMain.on('proceed-close', (event, shouldClose) => {
-    if (shouldClose && win) {
+    if (!shouldClose || !win || win.isDestroyed()) return;
+
+    // Closing the window keeps Nosh in the tray (so Ctrl+Alt+N keeps working);
+    // "Quit Nosh" in the tray menu, or turning the option off, really exits.
+    if (!pendingCloseIsQuit && noshTray.shouldKeepInTray()) {
+        win.hide();
+        noshTray.showHint();
+    } else {
+        pendingCloseIsQuit = false;
         win.destroy();
     }
 });
+
+function showMainWindow() {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+}
+
+// Really quit, still honouring the "unsaved changes" prompt
+async function requestQuit() {
+    if (!win || win.isDestroyed()) {
+        app.quit();
+        return;
+    }
+    let dirty = true;
+    try {
+        dirty = await win.webContents.executeJavaScript('Boolean(hasUnsavedChanges && activeNoteName)');
+    } catch (_) {}
+
+    quitIntent = true;
+    if (dirty && !win.isVisible()) showMainWindow(); // the prompt needs a visible window
+    win.close();
+}
 
 // Shell & Native OS helpers
 ipcMain.handle('open-external', async (event, externalUrl) => {
@@ -1320,6 +1358,7 @@ ipcMain.on('quick-capture-result', (event, response) => {
 
 app.on('will-quit', () => {
     globalShortcut.unregisterAll();
+    noshTray.destroyTray();
 });
 
 // Google Drive Callback
@@ -1570,8 +1609,17 @@ app.whenReady().then(() => {
         });
     });
 
+    noshTray.loadPrefs();
     createWindow();
-    registerQuickCaptureShortcut();
+    const shortcutRegistered = registerQuickCaptureShortcut();
+    noshTray.createTray({
+        iconPath: path.join(__dirname, 'icon.ico'),
+        fallbackIconPath: path.join(__dirname, 'icon.png'),
+        shortcutRegistered,
+        onOpen: showMainWindow,
+        onQuickCapture: showQuickCaptureWindow,
+        onQuit: requestQuit
+    });
 });
 
 app.on('window-all-closed', () => {
