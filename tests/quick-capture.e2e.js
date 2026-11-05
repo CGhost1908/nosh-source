@@ -21,7 +21,7 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
             BrowserWindow.getAllWindows()
                 .filter(w => w.webContents.getURL().includes('quick-capture'))
                 .map(w => ({ visible: w.isVisible(), onTop: w.isAlwaysOnTop(), bounds: w.getBounds() }))[0] || null);
-        const openCapture = () => main.evaluate(() => require('electron').ipcRenderer.send('quick-capture-open'));
+        const openCapture = () => main.evaluate(() => ipcRenderer.send('quick-capture-open'));
 
         // 1. Open the capture window
         await openCapture();
