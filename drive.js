@@ -1,20 +1,56 @@
 // Google Drive Cloud Synchronization Logic
+//
+// The Drive API itself runs in the preload (window.nosh.drive), out of the page's reach: the page
+// sends its saved credentials/tokens with each request and gets plain results back. This file keeps
+// the sync UI and the note logic.
 
-const driveCallback = 'http://localhost:2222/drive-callback';
+function storedValue(key) {
+    const value = localStorage.getItem(key);
+    return value && value !== 'null' ? value : '';
+}
 
-function getDriveCredentials() {
-    const fallbackId = (typeof defaultDriveClientId !== 'undefined' ? defaultDriveClientId : (window?.defaultDriveClientId || ''));
-    const fallbackSecret = (typeof defaultDriveClientSecret !== 'undefined' ? defaultDriveClientSecret : (window?.defaultDriveClientSecret || ''));
+function getDriveAuth() {
     return {
-        clientId: process.env.GOOGLE_DRIVE_CLIENT_ID || localStorage.getItem('drive_client_id') || fallbackId,
-        clientSecret: process.env.GOOGLE_DRIVE_CLIENT_SECRET || localStorage.getItem('drive_client_secret') || fallbackSecret
+        clientId: storedValue('drive_client_id'),
+        clientSecret: storedValue('drive_client_secret'),
+        accessToken: storedValue('google_drive_access_token'),
+        refreshToken: storedValue('google_drive_refresh_token')
     };
 }
 
-function openDriveAuth() {
-    const { clientId, clientSecret } = getDriveCredentials();
+function storeDriveTokens(tokens) {
+    if (!tokens) return;
+    if (tokens.accessToken) localStorage.setItem('google_drive_access_token', tokens.accessToken);
+    if (tokens.refreshToken) localStorage.setItem('google_drive_refresh_token', tokens.refreshToken);
+}
 
-    if (!clientId || !clientSecret) {
+// Runs one Drive operation. Throws an Error carrying `code` on failure;
+// DRIVE_NOT_CONFIGURED / DRIVE_SESSION_EXPIRED mean "treat Drive as unavailable".
+async function driveCall(operation, ...args) {
+    const response = await window.nosh.drive.call(operation, getDriveAuth(), args);
+    storeDriveTokens(response && response.tokens);
+    if (!response || !response.ok) {
+        const err = new Error((response && response.message) || 'Google Drive request failed');
+        err.code = (response && response.code) || 'DRIVE_ERROR';
+        if (err.code === 'DRIVE_SESSION_EXPIRED') {
+            showToast('Google Drive session expired. Please reconnect in Settings.', 'warning');
+        }
+        throw err;
+    }
+    return response.value;
+}
+
+function isDriveUnavailable(err) {
+    return Boolean(err) && (err.code === 'DRIVE_NOT_CONFIGURED' || err.code === 'DRIVE_SESSION_EXPIRED');
+}
+
+function hasDriveCredentials() {
+    const auth = getDriveAuth();
+    return window.nosh.drive.hasDefaultCredentials() || Boolean(auth.clientId && auth.clientSecret);
+}
+
+async function openDriveAuth() {
+    if (!hasDriveCredentials()) {
         showToast('Please set Google Drive Client ID & Secret in environment or settings', 'warning');
         openSettingsModal();
         switchSettingsTab('integrations');
@@ -22,17 +58,7 @@ function openDriveAuth() {
     }
 
     try {
-        const { google } = require('googleapis');
-        const oAuth2Client = new google.auth.OAuth2(clientId, clientSecret, driveCallback);
-        const authUrl = oAuth2Client.generateAuthUrl({
-            access_type: 'offline',
-            prompt: 'consent',
-            scope: [
-                'https://www.googleapis.com/auth/drive.file',
-                'https://www.googleapis.com/auth/userinfo.email'
-            ]
-        });
-
+        const authUrl = await driveCall('authUrl');
         ipcRenderer.invoke('open-external', authUrl);
         showToast('Complete Google authorization in your browser', 'info');
     } catch (err) {
@@ -43,15 +69,11 @@ function openDriveAuth() {
 
 async function fetchDriveUserProfile() {
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) return null;
-        const res = await drive.about.get({ fields: 'user(displayName,emailAddress)' });
-        if (res && res.data && res.data.user) {
-            const email = res.data.user.emailAddress;
-            const name = res.data.user.displayName;
-            if (email) localStorage.setItem('google_drive_email', email);
-            if (name) localStorage.setItem('google_drive_name', name);
-            return { email, name };
+        const user = await driveCall('profile');
+        if (user) {
+            if (user.email) localStorage.setItem('google_drive_email', user.email);
+            if (user.name) localStorage.setItem('google_drive_name', user.name);
+            return { email: user.email, name: user.name };
         }
     } catch (e) {
         console.warn('Could not fetch drive user profile:', e);
@@ -104,56 +126,6 @@ function updateDriveSyncButtonState(isSynced) {
         syncLabel.textContent = 'Sync to Drive';
         syncBtn.title = 'Sync this note to Google Drive';
     }
-}
-
-// Centralized authenticated Drive client with auto-refresh and persistence
-async function getAuthenticatedDriveClient() {
-    const accessToken = localStorage.getItem('google_drive_access_token');
-    const refreshToken = localStorage.getItem('google_drive_refresh_token');
-
-    if (!accessToken && !refreshToken) {
-        return null;
-    }
-
-    const { clientId, clientSecret } = getDriveCredentials();
-    if (!clientId || !clientSecret) {
-        return null;
-    }
-
-    const { google } = require('googleapis');
-    const oAuth2Client = new google.auth.OAuth2(clientId, clientSecret, driveCallback);
-
-    oAuth2Client.setCredentials({
-        access_token: accessToken || undefined,
-        refresh_token: refreshToken || undefined
-    });
-
-    oAuth2Client.on('tokens', (tokens) => {
-        if (tokens.access_token) {
-            localStorage.setItem('google_drive_access_token', tokens.access_token);
-        }
-        if (tokens.refresh_token) {
-            localStorage.setItem('google_drive_refresh_token', tokens.refresh_token);
-        }
-    });
-
-    // Proactively verify/refresh access token if refresh_token is present
-    if (refreshToken) {
-        try {
-            const tokenRes = await oAuth2Client.getAccessToken();
-            if (tokenRes && tokenRes.token) {
-                localStorage.setItem('google_drive_access_token', tokenRes.token);
-            }
-        } catch (err) {
-            console.error('Failed to validate or refresh Google Drive access token:', err);
-            if (err.message && (err.message.includes('invalid_grant') || err.message.includes('Invalid Credentials'))) {
-                showToast('Google Drive session expired. Please reconnect in Settings.', 'warning');
-                return null;
-            }
-        }
-    }
-
-    return google.drive({ version: 'v3', auth: oAuth2Client });
 }
 
 // Drive Sync Confirmation State
@@ -313,64 +285,14 @@ document.addEventListener('keydown', (e) => {
 // Upload file to Google Drive folder 'noshTheNotepad'
 async function uploadFileToDrive(filePath, fileContent) {
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) {
-            console.warn('Google Drive not authenticated');
-            return false;
-        }
-
-        const fileName = path.basename(filePath);
-
-        // Find or create 'noshTheNotepad' folder
-        const folderRes = await drive.files.list({
-            q: "name = 'noshTheNotepad' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-            fields: 'files(id, name)'
-        });
-
-        let folderId = folderRes.data.files && folderRes.data.files[0]?.id;
-        if (!folderId) {
-            const createFolder = await drive.files.create({
-                resource: { name: 'noshTheNotepad', mimeType: 'application/vnd.google-apps.folder' },
-                fields: 'id'
-            });
-            folderId = createFolder.data.id;
-        }
-
-        const fileRes = await drive.files.list({
-            q: `name = '${fileName}' and '${folderId}' in parents and trashed = false`,
-            fields: 'files(id, name)'
-        });
-
-        const media = {
-            mimeType: 'text/plain',
-            body: fileContent
-        };
-
-        if (fileRes.data.files && fileRes.data.files.length > 0) {
-            const fileId = fileRes.data.files[0].id;
-            await drive.files.update({
-                fileId: fileId,
-                media: media
-            });
-            // Clean up any extraneous duplicate copies
-            for (let i = 1; i < fileRes.data.files.length; i++) {
-                try {
-                    await drive.files.delete({ fileId: fileRes.data.files[i].id });
-                } catch (_) {}
-            }
-        } else {
-            await drive.files.create({
-                resource: {
-                    name: fileName,
-                    parents: [folderId]
-                },
-                media: media,
-                fields: 'id'
-            });
-        }
+        await driveCall('upload', path.basename(filePath), fileContent);
         return true;
     } catch (err) {
-        console.error('Error syncing file to Google Drive:', err);
+        if (isDriveUnavailable(err)) {
+            console.warn('Google Drive not authenticated');
+        } else {
+            console.error('Error syncing file to Google Drive:', err);
+        }
         return false;
     }
 }
@@ -378,22 +300,10 @@ async function uploadFileToDrive(filePath, fileContent) {
 // Delete file from Drive
 async function deleteFileFromDriveByName(fileName) {
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) return false;
-
-        const fileRes = await drive.files.list({
-            q: `name = '${fileName}.nsh' and trashed = false`,
-            fields: 'files(id, name)'
-        });
-
-        if (fileRes.data.files && fileRes.data.files.length > 0) {
-            for (const file of fileRes.data.files) {
-                await drive.files.delete({ fileId: file.id });
-            }
-        }
+        await driveCall('deleteByName', fileName);
         return true;
     } catch (err) {
-        console.error('Error deleting file from Google Drive:', err);
+        if (!isDriveUnavailable(err)) console.error('Error deleting file from Google Drive:', err);
         return false;
     }
 }
@@ -401,25 +311,10 @@ async function deleteFileFromDriveByName(fileName) {
 // Rename file on Drive
 async function renameFileDrive(oldName, newName) {
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) return false;
-
-        const fileRes = await drive.files.list({
-            q: `name = '${oldName}.nsh' and trashed = false`,
-            fields: 'files(id, name)'
-        });
-
-        if (fileRes.data.files && fileRes.data.files.length > 0) {
-            for (const file of fileRes.data.files) {
-                await drive.files.update({
-                    fileId: file.id,
-                    resource: { name: `${newName}.nsh` }
-                });
-            }
-        }
+        await driveCall('rename', oldName, newName);
         return true;
     } catch (err) {
-        console.error('Error renaming file on Google Drive:', err);
+        if (!isDriveUnavailable(err)) console.error('Error renaming file on Google Drive:', err);
         return false;
     }
 }
@@ -427,43 +322,26 @@ async function renameFileDrive(oldName, newName) {
 // Get list of synced files from Drive and apply badges
 async function getNoshFilesFromDrive() {
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) return;
+        const names = await driveCall('listSyncedNames');
+        if (!names) return; // no Drive folder yet
 
-        const folderRes = await drive.files.list({
-            q: "name = 'noshTheNotepad' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-            fields: 'files(id, name)'
-        });
+        const driveFileNames = new Set(names);
 
-        if (!folderRes.data.files || folderRes.data.files.length === 0) return;
-        const folderId = folderRes.data.files[0].id;
-
-        const filesRes = await drive.files.list({
-            q: `'${folderId}' in parents and trashed = false`,
-            fields: 'files(id, name)',
-            pageSize: 1000
-        });
-
-        if (filesRes.data.files) {
-            const driveFileNames = new Set(filesRes.data.files.map(f => path.basename(f.name, '.nsh')));
-
-            document.querySelectorAll('.save').forEach(el => {
-                const fName = el.getAttribute('data-file') || el.getAttribute('file-name');
-                if (fName && driveFileNames.has(fName)) {
-                    el.classList.add('drive-save');
-                } else {
-                    el.classList.remove('drive-save');
-                }
-            });
-
-            if (activeNoteName) {
-                const safeName = path.basename(activeNoteName, '.nsh');
-                const isSynced = driveFileNames.has(safeName);
-                updateDriveSyncButtonState(isSynced);
+        document.querySelectorAll('.save').forEach(el => {
+            const fName = el.getAttribute('data-file') || el.getAttribute('file-name');
+            if (fName && driveFileNames.has(fName)) {
+                el.classList.add('drive-save');
+            } else {
+                el.classList.remove('drive-save');
             }
+        });
+
+        if (activeNoteName) {
+            const safeName = path.basename(activeNoteName, '.nsh');
+            updateDriveSyncButtonState(driveFileNames.has(safeName));
         }
     } catch (err) {
-        console.error('Error getting files from Google Drive:', err);
+        if (!isDriveUnavailable(err)) console.error('Error getting files from Google Drive:', err);
     }
 }
 
@@ -489,29 +367,23 @@ async function checkNonExistFilesDrive() {
     }
 
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) {
-            container.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:10px 0;">Unable to authenticate with Google Drive. Please reconnect in Settings.</div>`;
-            return;
+        let listing;
+        try {
+            listing = await driveCall('listNoteFiles');
+        } catch (err) {
+            if (isDriveUnavailable(err)) {
+                container.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:10px 0;">Unable to authenticate with Google Drive. Please reconnect in Settings.</div>`;
+                return;
+            }
+            throw err;
         }
 
-        const folderRes = await drive.files.list({
-            q: "name = 'noshTheNotepad' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-            fields: 'files(id, name)'
-        });
-
-        if (!folderRes.data.files || folderRes.data.files.length === 0) {
+        if (!listing.folderExists) {
             container.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:10px 0;">Folder 'noshTheNotepad' does not exist on Drive yet.</div>`;
             return;
         }
 
-        const folderId = folderRes.data.files[0].id;
-        const fileRes = await drive.files.list({
-            q: `'${folderId}' in parents and name contains '.nsh' and trashed = false`,
-            fields: 'files(id, name)'
-        });
-
-        const files = fileRes.data.files || [];
+        const files = listing.files || [];
         const localFiles = await fsPromises.readdir(savesDir);
 
         const missing = files.filter(f => !localFiles.includes(f.name));
@@ -553,23 +425,24 @@ async function importFileFromDrive(fileName, fileId, btn) {
     }
 
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (!drive) {
-            showToast('Unable to authenticate with Google Drive', 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = 'Import';
+        let noteText;
+        try {
+            noteText = await driveCall('download', fileId);
+        } catch (err) {
+            if (isDriveUnavailable(err)) {
+                showToast('Unable to authenticate with Google Drive', 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Import';
+                }
+                return;
             }
-            return;
+            throw err;
         }
 
-        const res = await drive.files.get({
-            fileId: fileId,
-            alt: 'media'
-        });
-
-        const targetPath = path.join(savesDir, fileName);
-        await fsPromises.writeFile(targetPath, res.data, 'utf8');
+        // The file name comes from Drive, so never let it point outside the notes folder
+        const targetPath = path.join(savesDir, path.basename(fileName));
+        await fsPromises.writeFile(targetPath, noteText, 'utf8');
 
         showToast(`Imported "${fileName}" from Google Drive`, 'success');
         await readDatabase(path.basename(fileName, '.nsh'));
@@ -589,12 +462,12 @@ async function refreshDriveToken() {
     if (!refreshToken) return;
 
     try {
-        const drive = await getAuthenticatedDriveClient();
-        if (drive && typeof readDatabase === 'function') {
+        await driveCall('ping'); // refreshes the access token when needed
+        if (typeof readDatabase === 'function') {
             readDatabase();
         }
     } catch (err) {
-        console.error('Error refreshing Google Drive token:', err);
+        if (!isDriveUnavailable(err)) console.error('Error refreshing Google Drive token:', err);
     }
 }
 

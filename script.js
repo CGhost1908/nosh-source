@@ -249,11 +249,12 @@ async function openNotesFolder() {
     }
 }
 
-// Safely resolve highlight.js for clean light theme syntax highlighting
-let pdfHljs = null;
-try {
-    pdfHljs = typeof require === 'function' ? require('highlight.js') : null;
-} catch (_) {}
+// highlight.js runs in the preload (the page has no require); this keeps the same call shape
+const pdfHljs = {
+    getLanguage: (lang) => window.nosh.highlight.hasLanguage(lang),
+    highlight: (code, options) => ({ value: window.nosh.highlight.highlight(code, options.language) }),
+    highlightAuto: (code) => ({ value: window.nosh.highlight.auto(code) })
+};
 
 function highlightCodeForPdf(codeText, rawLang) {
     if (!codeText) return '';
@@ -306,11 +307,10 @@ function highlightCodeForPdf(codeText, rawLang) {
     const mapped = langMap[cleanLang] || cleanLang;
 
     try {
-        if (mapped && pdfHljs.getLanguage(mapped)) {
-            return pdfHljs.highlight(codeText, { language: mapped, ignoreIllegals: true }).value;
-        } else {
-            return pdfHljs.highlightAuto(codeText).value;
-        }
+        const highlighted = (mapped && pdfHljs.getLanguage(mapped))
+            ? pdfHljs.highlight(codeText, { language: mapped, ignoreIllegals: true }).value
+            : pdfHljs.highlightAuto(codeText).value;
+        return highlighted == null ? safeEscape(codeText) : highlighted;
     } catch (_) {
         return safeEscape(codeText);
     }

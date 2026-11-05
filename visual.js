@@ -324,7 +324,6 @@ function openExternalUrlSafely(rawUrl) {
     const safeUrl = normalizeExternalUrl(rawUrl);
     if (!safeUrl) return;
     try {
-        const { shell } = require('electron');
         shell.openExternal(safeUrl);
     } catch {
         if (typeof ipcRenderer !== 'undefined') {
@@ -341,7 +340,7 @@ function updateLinkUrlPreview() {
 
 function pasteUrlFromClipboard() {
     try {
-        const text = require('electron').clipboard.readText() || '';
+        const text = nativeClipboard.readText() || '';
         const urlInput = document.getElementById('link-url-input');
         if (urlInput && text.trim()) {
             urlInput.value = text.trim();
@@ -389,7 +388,7 @@ function openLinkModal(defaultTab = 'url', prefillUrl = '', prefillText = '') {
     // Auto-prefill URL from clipboard if opening fresh and clipboard has a link
     if (!isEdit && urlInput && !urlInput.value.trim()) {
         try {
-            const cbText = (require('electron').clipboard.readText() || '').trim();
+            const cbText = (nativeClipboard.readText() || '').trim();
             const isUrlPattern = /^https?:\/\/\S+/i.test(cbText) || /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\b/i.test(cbText);
             if (isUrlPattern) {
                 urlInput.value = cbText;

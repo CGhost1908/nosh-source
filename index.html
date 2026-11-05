@@ -1818,6 +1818,38 @@
     <input type="file" id="open-file" accept=".nsh,.txt,.html,.md" style="display: none;">
 
     <!-- Scripts Order -->
+    <!-- Preload bridge compatibility layer: ipcRenderer, fs, fsPromises, path, shell (no Node in this window) -->
+    <script src="renderer-bridge.js"></script>
+
+    <!-- CodeMirror 5 core, addons and language modes (load order follows each file's own dependencies) -->
+    <script src="node_modules/codemirror/lib/codemirror.js"></script>
+    <script src="node_modules/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="node_modules/codemirror/addon/hint/show-hint.js"></script>
+    <script src="node_modules/codemirror/addon/search/searchcursor.js"></script>
+    <script src="node_modules/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="node_modules/codemirror/keymap/sublime.js"></script>
+    <script src="node_modules/codemirror/mode/clike/clike.js"></script>
+    <script src="node_modules/codemirror/mode/javascript/javascript.js"></script>
+    <script src="node_modules/codemirror/addon/hint/javascript-hint.js"></script>
+    <script src="node_modules/codemirror/mode/xml/xml.js"></script>
+    <script src="node_modules/codemirror/mode/css/css.js"></script>
+    <script src="node_modules/codemirror/mode/htmlmixed/htmlmixed.js"></script>
+    <script src="node_modules/codemirror/addon/hint/xml-hint.js"></script>
+    <script src="node_modules/codemirror/addon/hint/html-hint.js"></script>
+    <script src="node_modules/codemirror/addon/hint/css-hint.js"></script>
+    <script src="node_modules/codemirror/mode/python/python.js"></script>
+    <script src="node_modules/codemirror/mode/php/php.js"></script>
+    <script src="node_modules/codemirror/mode/ruby/ruby.js"></script>
+    <script src="node_modules/codemirror/mode/go/go.js"></script>
+    <script src="node_modules/codemirror/mode/sql/sql.js"></script>
+    <script src="node_modules/codemirror/mode/shell/shell.js"></script>
+    <script src="node_modules/codemirror/mode/meta.js"></script>
+    <script src="node_modules/codemirror/mode/markdown/markdown.js"></script>
+    <script src="node_modules/codemirror/mode/yaml/yaml.js"></script>
+    <script src="node_modules/codemirror/addon/mode/simple.js"></script>
+    <script src="node_modules/codemirror/mode/rust/rust.js"></script>
+    <script src="node_modules/codemirror/mode/swift/swift.js"></script>
+
     <script src="requirements.js"></script>
     <script src="visual.js"></script>
     <script src="drive.js"></script>

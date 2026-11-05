@@ -11,12 +11,9 @@ async function saveMediaAsset(file) {
     const assetFileName = `asset_${Date.now()}_${cleanBase}`;
     const targetPath = path.join(assetsDir, assetFileName);
 
-    if (file.path && fs.existsSync(file.path)) {
-        await fsPromises.copyFile(file.path, targetPath);
-    } else {
-        const arrayBuffer = await file.arrayBuffer();
-        await fsPromises.writeFile(targetPath, Buffer.from(arrayBuffer));
-    }
+    // Electron no longer exposes File.path, so media always arrives as bytes
+    const arrayBuffer = await file.arrayBuffer();
+    await fsPromises.writeFile(targetPath, new Uint8Array(arrayBuffer));
     return `assets/${assetFileName}`;
 }
 
@@ -114,8 +111,7 @@ function handleMediaUrlInput(url) {
 
 function pasteMediaUrlFromClipboard() {
     try {
-        const { clipboard } = require('electron');
-        const text = clipboard.readText();
+        const text = nativeClipboard.readText();
         const urlInput = document.getElementById('media-url-input');
         if (urlInput && text) {
             urlInput.value = text.trim();

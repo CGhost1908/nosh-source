@@ -113,7 +113,6 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
         const urlParams = new URLSearchParams(window.location.search);
         let currentVideoId = urlParams.get('v') || 'rFZHOHl-L8A';
         if (currentVideoId === 'jfKfPfyJRdk') currentVideoId = 'rFZHOHl-L8A';
@@ -121,8 +120,8 @@
         let isAlwaysOnTop = true;
         let noshServerPort = 2222;
 
-        if (typeof ipcRenderer !== 'undefined' && ipcRenderer.invoke) {
-            ipcRenderer.invoke('get-server-port').then(p => {
+        if (window.pip) {
+            window.pip.getServerPort().then(p => {
                 if (p) noshServerPort = p;
                 loadVideo(currentVideoId, currentTitle);
             }).catch(() => {});
@@ -151,16 +150,16 @@
         }
 
         function togglePin(btn) {
-            const { remote } = require('electron');
-            const currentWin = remote ? remote.getCurrentWindow() : null;
             isAlwaysOnTop = !isAlwaysOnTop;
-            if (currentWin) currentWin.setAlwaysOnTop(isAlwaysOnTop);
+            if (window.pip) window.pip.setAlwaysOnTop(isAlwaysOnTop);
             btn.querySelector('iconify-icon').style.color = isAlwaysOnTop ? '#60a5fa' : 'var(--text-muted)';
         }
 
-        ipcRenderer.on('load-video', (event, { videoId, title }) => {
-            loadVideo(videoId, title);
-        });
+        if (window.pip) {
+            window.pip.onLoadVideo(({ videoId, title }) => {
+                loadVideo(videoId, title);
+            });
+        }
 
         loadVideo(currentVideoId, currentTitle);
     </script>

@@ -5,16 +5,8 @@ async function invokeSavesDir() {
     if (customPath && customPath !== 'null' && fs.existsSync(customPath)) {
         savesDir = customPath;
     } else {
-        try {
-            savesDir = await ipcRenderer.invoke('get-save-path');
-        } catch (e) {
-            // Local fallback
-            const roaming = process.env.APPDATA || process.env.HOME || process.cwd();
-            savesDir = path.join(roaming, 'nosh', 'Saves');
-            if (!fs.existsSync(savesDir)) {
-                fs.mkdirSync(savesDir, { recursive: true });
-            }
-        }
+        // The main process decides the default notes folder (the page has no access to the environment)
+        savesDir = await ipcRenderer.invoke('get-save-path');
         localStorage.setItem('saves-path', savesDir);
     }
 

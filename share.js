@@ -153,7 +153,7 @@ async function resolvePublishedMediaInHTML(rawHtml, onProgressStatus) {
             };
         } else if (rawSrc.startsWith('file://')) {
             let localPath = decodeURIComponent(rawSrc.replace(/^file:\/\/\/?/i, ''));
-            if (typeof process !== 'undefined' && process.platform !== 'win32' && !localPath.startsWith('/')) {
+            if (window.nosh.platform !== 'win32' && !localPath.startsWith('/')) {
                 localPath = '/' + localPath;
             }
             uploadPayload = {
