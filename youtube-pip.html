@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>YouTube Player - Nosh</title>
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <style>
+        :root {
+            --bg-app: #0e1015;
+            --bg-header: #141720;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent-yt: #ef4444;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            background: var(--bg-app);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .pip-header {
+            height: 34px;
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            -webkit-app-region: drag;
+        }
+        .pip-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .pip-title {
+            font-size: 11.5px;
+            font-weight: 500;
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 320px;
+        }
+        .pip-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            -webkit-app-region: no-drag;
+        }
+        .pip-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+        .pip-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+        }
+        .pip-btn.close:hover {
+            background: #ef4444;
+            color: #ffffff;
+        }
+        .pip-player-container {
+            flex: 1;
+            background: #000;
+            position: relative;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="pip-header">
+        <div class="pip-title-wrap">
+            <iconify-icon icon="logos:youtube-icon" width="16"></iconify-icon>
+            <span class="pip-title" id="pip-title-text">Lofi Hip Hop Radio</span>
+        </div>
+        <div class="pip-actions">
+            <button class="pip-btn" onclick="togglePin(this)" title="Toggle Always on Top" id="pin-btn">
+                <iconify-icon icon="solar:pin-bold" style="color: #60a5fa;"></iconify-icon>
+            </button>
+            <button class="pip-btn close" onclick="closePipWindow()" title="Close Player">
+                <iconify-icon icon="solar:close-square-linear"></iconify-icon>
+            </button>
+        </div>
+    </div>
+    <div class="pip-player-container">
+        <iframe id="pip-iframe" src="" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentVideoId = urlParams.get('v') || 'rFZHOHl-L8A';
+        if (currentVideoId === 'jfKfPfyJRdk') currentVideoId = 'rFZHOHl-L8A';
+        let currentTitle = urlParams.get('title') || 'Lofi Girl - Beats to Study to';
+        let isAlwaysOnTop = true;
+        let noshServerPort = 2222;
+
+        if (typeof ipcRenderer !== 'undefined' && ipcRenderer.invoke) {
+            ipcRenderer.invoke('get-server-port').then(p => {
+                if (p) noshServerPort = p;
+                loadVideo(currentVideoId, currentTitle);
+            }).catch(() => {});
+        }
+
+        function loadVideo(id, title) {
+            currentVideoId = id;
+            if (title) {
+                currentTitle = title;
+                document.getElementById('pip-title-text').textContent = title;
+            }
+            const iframe = document.getElementById('pip-iframe');
+            const isList = id && (id.startsWith('videoseries?') || id.startsWith('playlist_'));
+            let playerUrl = `http://localhost:${noshServerPort}/youtube-player?autoplay=1`;
+            if (isList) {
+                const listClean = id.replace('playlist_', '').replace('videoseries?list=', '');
+                playerUrl += `&list=${encodeURIComponent(listClean)}`;
+            } else {
+                playerUrl += `&v=${encodeURIComponent(id)}`;
+            }
+            iframe.src = playerUrl;
+        }
+
+        function closePipWindow() {
+            window.close();
+        }
+
+        function togglePin(btn) {
+            const { remote } = require('electron');
+            const currentWin = remote ? remote.getCurrentWindow() : null;
+            isAlwaysOnTop = !isAlwaysOnTop;
+            if (currentWin) currentWin.setAlwaysOnTop(isAlwaysOnTop);
+            btn.querySelector('iconify-icon').style.color = isAlwaysOnTop ? '#60a5fa' : 'var(--text-muted)';
+        }
+
+        ipcRenderer.on('load-video', (event, { videoId, title }) => {
+            loadVideo(videoId, title);
+        });
+
+        loadVideo(currentVideoId, currentTitle);
+    </script>
+</body>
+</html>

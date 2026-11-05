@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nosh Web Viewer</title>
+    <link rel="icon" href="icon.ico" type="image/x-icon">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="view.css?v=2.6">
+    
+    <style>
+        /* Fail-safe inline styles to prevent browser cache mismatch */
+        html {
+            font-size: 16px;
+        }
+        .top-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 68px;
+            background: rgba(9, 10, 15, 0.85);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            z-index: 1000;
+        }
+        .nav-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 100%;
+            max-width: 1360px;
+            margin: 0 auto;
+            padding: 0 1.75rem;
+        }
+        .nav-brand-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+            max-width: calc(50% - 240px);
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            flex-shrink: 0;
+        }
+        .brand-logo {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+        }
+        .brand-name {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #f8fafc;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        }
+        .nav-doc-sep {
+            color: #64748b;
+            font-size: 1rem;
+            user-select: none;
+        }
+        .nav-doc-title {
+            font-size: 0.92rem;
+            font-weight: 500;
+            color: #94a3b8;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .nav-links {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        .nav-link {
+            font-size: 0.92rem;
+            font-weight: 500;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.22s ease;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        }
+        .nav-link:hover {
+            color: #f8fafc;
+        }
+        .github-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+        .github-nav-link iconify-icon {
+            font-size: 1.15rem;
+        }
+        .nav-action {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-shrink: 0;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            padding: 0.7rem 1.35rem;
+            font-size: 0.92rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.22s ease;
+            text-align: center;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            text-decoration: none;
+            line-height: 1.6;
+        }
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+        .btn-nav-cta {
+            background: rgba(255, 255, 255, 0.08);
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            box-sizing: border-box;
+        }
+        .btn-nav-cta:hover {
+            background: #4f46e5;
+            border-color: #4f46e5;
+            box-shadow: 0 0 16px rgba(99, 102, 241, 0.28);
+            color: #ffffff;
+        }
+        /* Clean Code Blocks & CodeMirror padding refinement */
+        .CodeMirror {
+            font-family: var(--font-code) !important;
+            font-size: 13px !important;
+            line-height: 1.65 !important;
+            height: auto !important;
+            background: var(--bg-code) !important;
+            padding: 4px 0 !important;
+        }
+        .CodeMirror-scroll {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow-y: hidden !important;
+            overflow-x: auto !important;
+        }
+        .CodeMirror-lines {
+            padding: 2px 0 4px 0 !important;
+        }
+        .code-block-wrapper {
+            margin: 14px 0;
+        }
+        .code-block-wrapper + .code-block-wrapper {
+            margin-top: 12px;
+        }
+        .code-action-btn.delete {
+            display: none !important;
+        }
+        .code-lang-tag .lang-caret {
+            display: none !important;
+        }
+        .reader-container {
+            padding-bottom: 65vh !important;
+        }
+        @media (max-width: 860px) {
+            .nav-links {
+                display: none;
+            }
+            .nav-container {
+                padding: 0 1rem;
+            }
+            .nav-brand-group {
+                max-width: calc(100% - 130px);
+            }
+        }
+    </style>
+    
+    <!-- CodeMirror & Dracula Theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/rust/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/go/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/swift/swift.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/yaml/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/markdown/markdown.min.js"></script>
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+</head>
+<body>
+    <!-- Header Navigation (Synchronized with Nosh Website) -->
+    <header class="top-nav">
+        <div class="nav-container">
+            <div class="nav-brand-group">
+                <a href="https://cghost1908.github.io/nosh" class="nav-brand" title="Nosh Home">
+                    <img src="icon.ico" alt="Nosh Logo" class="brand-logo">
+                    <span class="brand-name">nosh</span>
+                </a>
+                <span class="nav-doc-sep">/</span>
+                <span class="nav-doc-title" id="nav-title">Loading note...</span>
+            </div>
+
+            <nav class="nav-links">
+                <a href="https://cghost1908.github.io/nosh#features" class="nav-link">Features</a>
+                <a href="https://cghost1908.github.io/nosh#downloads" class="nav-link">Downloads</a>
+                <a href="https://cghost1908.github.io/nosh#changelog" class="nav-link">Changelog</a>
+                <a href="https://cghost1908.github.io/nosh#contact" class="nav-link">Contact</a>
+                <a href="https://github.com/CGhost1908/nosh-source" target="_blank" rel="noopener noreferrer" class="nav-link github-nav-link">
+                    <iconify-icon icon="mdi:github"></iconify-icon>
+                    <span>GitHub</span>
+                </a>
+            </nav>
+
+            <div class="nav-action">
+                <a href="https://cghost1908.github.io/nosh#downloads" class="btn btn-sm btn-nav-cta">
+                    <iconify-icon icon="lucide:download"></iconify-icon>
+                    <span>Get Nosh</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Document Reader Container (Clean Flat Document Layout) -->
+    <main class="reader-container" id="content">
+        <div class="state-container" id="loading-state">
+            <div class="skeleton-view-doc">
+                <div class="view-skeleton sk-view-title"></div>
+                <div class="view-skeleton sk-view-meta"></div>
+                <div class="sk-view-paragraphs">
+                    <div class="view-skeleton sk-view-line" style="width: 96%;"></div>
+                    <div class="view-skeleton sk-view-line" style="width: 88%;"></div>
+                    <div class="view-skeleton sk-view-line" style="width: 94%;"></div>
+                    <div class="view-skeleton sk-view-line" style="width: 65%;"></div>
+                </div>
+                <div class="sk-view-code">
+                    <div class="sk-view-code-header">
+                        <div class="sk-view-code-dots">
+                            <span class="view-skeleton sk-view-code-dot"></span>
+                            <span class="view-skeleton sk-view-code-dot"></span>
+                            <span class="view-skeleton sk-view-code-dot"></span>
+                        </div>
+                        <div class="view-skeleton" style="width: 60px; height: 18px; border-radius: 4px;"></div>
+                    </div>
+                    <div class="sk-view-code-body">
+                        <div class="view-skeleton sk-view-line" style="width: 45%;"></div>
+                        <div class="view-skeleton sk-view-line" style="width: 72%; margin-left: 20px;"></div>
+                        <div class="view-skeleton sk-view-line" style="width: 58%; margin-left: 20px;"></div>
+                        <div class="view-skeleton sk-view-line" style="width: 80%; margin-left: 20px;"></div>
+                        <div class="view-skeleton sk-view-line" style="width: 35%;"></div>
+                    </div>
+                </div>
+                <div class="sk-view-paragraphs">
+                    <div class="view-skeleton sk-view-line" style="width: 92%;"></div>
+                    <div class="view-skeleton sk-view-line" style="width: 78%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="error-container" id="error-state" style="display: none;">
+            <iconify-icon icon="solar:danger-triangle-linear" class="error-icon"></iconify-icon>
+            <h2 id="error-title">Note Not Found</h2>
+            <p id="error-desc">The requested note does not exist or may have been removed.</p>
+            <a href="https://cghost1908.github.io/nosh" class="error-link">Visit Nosh</a>
+        </div>
+
+        <article id="note-article" class="doc-article" style="display: none;">
+            <div class="doc-meta" id="doc-date"></div>
+            <div class="doc-body" id="note-body"></div>
+        </article>
+    </main>
+
+    <div class="toast-notification" id="toast">Link copied to clipboard</div>
+
+    <script>
+        // Supabase Cloud Configuration
+        const SUPABASE_URL = 'https://buvtdaxlibejpjlkxaor.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnRkYXhsaWJlanBqbGt4YW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1MjA2NTIsImV4cCI6MjEwOTA5NjY1Mn0.Kd2bR8gAm2lLGKHLhV1CJCacuLE1NKPptVmIJiKZnNY';
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.add('visible');
+            setTimeout(() => { toast.classList.remove('visible'); }, 2000);
+        }
+
+        function copyShareUrl() {
+            navigator.clipboard.writeText(window.location.href)
+                .then(() => showToast('Share link copied to clipboard'))
+                .catch(() => alert('Failed to copy link.'));
+        }
+
+        function mapLanguageMode(raw) {
+            if (!raw) return 'javascript';
+            const lower = raw.toLowerCase().trim();
+            if (lower.includes('py')) return 'python';
+            if (lower.includes('rust')) return 'rust';
+            if (lower.includes('go')) return 'go';
+            if (lower.includes('swift')) return 'swift';
+            if (lower.includes('c++') || lower.includes('cpp')) return 'text/x-c++src';
+            if (lower === 'c' || lower.includes('x-csrc')) return 'text/x-csrc';
+            if (lower.includes('java')) return 'text/x-java';
+            if (lower.includes('sql')) return 'sql';
+            if (lower.includes('sh') || lower.includes('bash')) return 'shell';
+            if (lower.includes('html') || lower.includes('xml')) return 'xml';
+            if (lower.includes('css')) return 'css';
+            if (lower.includes('json')) return 'javascript';
+            if (lower.includes('yaml') || lower.includes('yml')) return 'yaml';
+            if (lower.includes('markdown') || lower.includes('md')) return 'markdown';
+            if (lower.includes('ts') || lower.includes('typescript')) return 'javascript';
+            return 'javascript';
+        }
+
+        function upgradeLegacyBlocksInDOM(container) {
+            const legacyLayers = container.querySelectorAll('.code-block-layer');
+            legacyLayers.forEach(layer => {
+                const parent = layer.parentElement;
+                const ta = parent ? parent.querySelector('textarea.code') : null;
+                if (!ta) return;
+
+                const langP = layer.querySelector('p');
+                const rawLang = (langP ? langP.textContent.trim() : '') || ta.getAttribute('language') || 'javascript';
+
+                let code = ta.value || '';
+                if (!code) {
+                    const deadCM = parent.querySelector('.CodeMirror');
+                    if (deadCM) {
+                        const lines = deadCM.querySelectorAll('.CodeMirror-line');
+                        if (lines && lines.length > 0) {
+                            code = Array.from(lines).map(l => l.textContent).join('\n');
+                        }
+                    }
+                }
+                if (!code) code = ta.textContent || '';
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper';
+
+                const header = document.createElement('div');
+                header.className = 'code-block-header';
+                header.innerHTML = `
+                    <div class="code-header-left">
+                        <span class="code-lang-tag">${rawLang}</span>
+                    </div>
+                    <div class="code-block-actions">
+                        <button class="code-action-btn wrap-btn" title="Toggle line wrap">Wrap</button>
+                        <button class="code-action-btn copy-btn" title="Copy code">Copy</button>
+                    </div>
+                `;
+
+                const newTa = document.createElement('textarea');
+                newTa.className = 'code';
+                newTa.setAttribute('language', rawLang);
+                newTa.value = code;
+                newTa.textContent = code;
+
+                wrapper.appendChild(header);
+                wrapper.appendChild(newTa);
+
+                if (parent === container) {
+                    layer.remove();
+                    ta.replaceWith(wrapper);
+                } else {
+                    parent.replaceWith(wrapper);
+                }
+            });
+
+            container.querySelectorAll('.code-block-wrapper .CodeMirror, .media-toolbar, .media-resize-handle').forEach(el => el.remove());
+        }
+
+        async function fetchPublishedNote() {
+            const params = new URLSearchParams(window.location.search);
+            const noteId = params.get('id');
+
+            const loadingEl = document.getElementById('loading-state');
+            const errorEl = document.getElementById('error-state');
+            const articleEl = document.getElementById('note-article');
+            const navTitle = document.getElementById('nav-title');
+            const noteBody = document.getElementById('note-body');
+            const docDate = document.getElementById('doc-date');
+
+            if (!noteId) {
+                loadingEl.style.display = 'none';
+                errorEl.style.display = 'block';
+                document.getElementById('error-title').textContent = 'No Document Specified';
+                document.getElementById('error-desc').textContent = 'Please provide a valid document link with a note ID.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/shared_notes?id=eq.${encodeURIComponent(noteId)}&select=*`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load note (HTTP ${response.status})`);
+                }
+
+                const data = await response.json();
+                if (!data || data.length === 0) {
+                    loadingEl.style.display = 'none';
+                    errorEl.style.display = 'block';
+                    document.getElementById('error-title').textContent = 'Note Not Found';
+                    document.getElementById('error-desc').textContent = 'The note you are looking for does not exist or may have expired.';
+                    return;
+                }
+
+                const note = data[0];
+                document.title = `${note.title || 'Note'} — Nosh`;
+                if (navTitle) navTitle.textContent = note.title || 'Untitled';
+
+                if (docDate && note.created_at) {
+                    const d = new Date(note.created_at);
+                    docDate.textContent = `Published on ${d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+                }
+
+                loadingEl.style.display = 'none';
+                articleEl.style.display = 'block';
+
+                if (noteBody) {
+                    noteBody.innerHTML = note.content;
+                    initInteractiveElements(noteBody);
+                }
+
+            } catch (err) {
+                console.error('Error fetching note:', err);
+                loadingEl.style.display = 'none';
+                errorEl.style.display = 'block';
+                document.getElementById('error-title').textContent = 'Connection Error';
+                document.getElementById('error-desc').textContent = err.message || 'Unable to connect to Supabase Cloud.';
+            }
+        }
+
+        function initInteractiveElements(container) {
+            upgradeLegacyBlocksInDOM(container);
+
+            const codeBlocks = container.querySelectorAll('.code-block-wrapper');
+            codeBlocks.forEach(wrapper => {
+                const ta = wrapper.querySelector('textarea.code');
+                if (!ta) return;
+
+                const rawLang = ta.getAttribute('language') || 'javascript';
+                const mode = mapLanguageMode(rawLang);
+                const initialCode = ta.value || ta.textContent || '';
+                ta.value = initialCode;
+
+                let cm = null;
+                if (window.CodeMirror) {
+                    cm = CodeMirror.fromTextArea(ta, {
+                        mode: mode,
+                        theme: 'dracula',
+                        readOnly: true,
+                        lineNumbers: true,
+                        lineWrapping: true,
+                        tabSize: 4
+                    });
+
+                    if (!cm.getValue() && initialCode) {
+                        cm.setValue(initialCode);
+                    }
+
+                    requestAnimationFrame(() => {
+                        cm.refresh();
+                    });
+                    setTimeout(() => {
+                        cm.refresh();
+                    }, 50);
+                    setTimeout(() => {
+                        cm.refresh();
+                    }, 250);
+                }
+
+                const wrapBtn = wrapper.querySelector('.wrap-btn');
+                if (wrapBtn && cm) {
+                    wrapBtn.onclick = () => {
+                        const cur = cm.getOption('lineWrapping');
+                        cm.setOption('lineWrapping', !cur);
+                        wrapBtn.classList.toggle('active', !cur);
+                    };
+                }
+
+                const copyBtn = wrapper.querySelector('.copy-btn');
+                if (copyBtn) {
+                    copyBtn.onclick = () => {
+                        const code = cm ? cm.getValue() : (ta.value || ta.textContent || '');
+                        navigator.clipboard.writeText(code).then(() => {
+                            const origText = copyBtn.textContent;
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(() => { copyBtn.textContent = origText; }, 1800);
+                            showToast('Code copied to clipboard');
+                        }).catch(e => {
+                            console.error('Copy failed:', e);
+                        });
+                    };
+                }
+            });
+
+            const checkboxes = container.querySelectorAll('.checklist-checkbox');
+            checkboxes.forEach(cb => {
+                cb.onchange = () => {
+                    const item = cb.closest('.checklist-item');
+                    if (item) {
+                        item.classList.toggle('completed', cb.checked);
+                    }
+                };
+            });
+
+            if (window.katex) {
+                container.querySelectorAll('.math-formula-block[data-latex], .math-formula-inline[data-latex]').forEach(el => {
+                    const latex = el.getAttribute('data-latex') || '';
+                    const isDisplay = el.getAttribute('data-display-mode') !== 'false' && el.classList.contains('math-formula-block');
+                    if (latex) {
+                        try {
+                            el.innerHTML = window.katex.renderToString(latex, {
+                                displayMode: isDisplay,
+                                throwOnError: false,
+                                strict: false
+                            });
+                        } catch (_) {}
+                    }
+                });
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', fetchPublishedNote);
+    </script>
+</body>
+</html>

@@ -1,116 +1,148 @@
-const { google } = require("googleapis");
-const { read } = require("original-fs");
-const fsPromises = require('fs').promises;
-const { create } = require('domain');
-const { ipcRenderer, dialog } = require('electron');
-const { exec } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { text } = require('stream/consumers');
-const axios = require('axios');
-const { shell } = require('electron');
-
-
-//Code Mirror
+// CodeMirror Core & Addons
 const CodeMirror = require('codemirror');
-const { basicSetup } = require("@codemirror/basic-setup");
-const { autocompletion } = require("@codemirror/autocomplete");
 require('codemirror/lib/codemirror');
 require('codemirror/addon/edit/closebrackets');
 require('codemirror/addon/hint/show-hint');
+require('codemirror/keymap/sublime.js');
 
-
-//C C++ Java
+// CodeMirror Modes
 require('codemirror/mode/clike/clike');
-
-// JavaScript
 require('codemirror/mode/javascript/javascript');
 require('codemirror/addon/hint/javascript-hint');
-
-// HTML
 require('codemirror/mode/htmlmixed/htmlmixed');
-require('codemirror/mode/xml/xml');  
+require('codemirror/mode/xml/xml');
 require('codemirror/addon/hint/html-hint');
-
-// CSS
 require('codemirror/mode/css/css');
 require('codemirror/addon/hint/css-hint');
-
-// Python 
 require('codemirror/mode/python/python');
-
-// PHP 
 require('codemirror/mode/php/php');
-
-// Ruby 
 require('codemirror/mode/ruby/ruby');
-
-// Another Languages
 require('codemirror/mode/go/go');
 require('codemirror/mode/sql/sql');
 require('codemirror/mode/shell/shell');
 require('codemirror/mode/markdown/markdown');
 require('codemirror/mode/yaml/yaml');
-require('codemirror/mode/javascript/javascript'); 
-require('codemirror/mode/haskell/haskell'); 
-require('codemirror/mode/dart/dart'); 
-require('codemirror/mode/groovy/groovy'); 
-require('codemirror/mode/vhdl/vhdl'); 
-require('codemirror/mode/verilog/verilog'); 
-require('codemirror/mode/clojure/clojure'); 
-require('codemirror/mode/swift/swift'); 
-require('codemirror/mode/rust/rust'); 
-require('codemirror/mode/elm/elm'); 
-require('codemirror/mode/crystal/crystal'); 
-require('codemirror/mode/r/r'); 
-require('codemirror/mode/d/d'); 
-require('codemirror/mode/tcl/tcl'); 
-require('codemirror/mode/powershell/powershell'); 
-require('codemirror/mode/xml/xml'); 
+require('codemirror/mode/rust/rust');
+require('codemirror/mode/swift/swift');
 
-// Autocomplete
-require('codemirror/addon/hint/show-hint');
-require('codemirror/addon/hint/javascript-hint');
-require('codemirror/addon/hint/html-hint');
-require('codemirror/addon/hint/css-hint');
-require('codemirror/keymap/sublime.js');
+// Node.js & Electron modules
+const { ipcRenderer, shell } = require('electron');
+const fs = require('fs');
+const fsPromises = fs.promises;
+const path = require('path');
+const axios = require('axios');
 
 const port = 2222;
-let savesDir;
+let savesDir = '';
+let activeNoteName = null;
+let hasUnsavedChanges = false;
 
-//spotify
-const spotifyClientSecret = '';
-const spotifyClientId = '';
+// Load local environment variables from .env if present (git-ignored)
+try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        for (const line of content.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx > 0) {
+                const key = trimmed.slice(0, eqIdx).trim();
+                let val = trimmed.slice(eqIdx + 1).trim();
+                if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                    val = val.slice(1, -1);
+                }
+                if (!process.env[key]) {
+                    process.env[key] = val;
+                }
+            }
+        }
+    }
+} catch (e) {
+    console.error('Error loading .env in renderer process:', e);
+}
 
-//github
-const githubToken = '';
-const repoOwner = 'cghost1908';
-const repoName = 'nosh';
+const defaultDriveClientId = process.env.GOOGLE_DRIVE_CLIENT_ID || '';
+const defaultDriveClientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || '';
+if (typeof window !== 'undefined') {
+    window.defaultDriveClientId = defaultDriveClientId;
+    window.defaultDriveClientSecret = defaultDriveClientSecret;
+}
 
-//global variables
+// Helper to find a sidebar note element by name safely
+function findNoteElement(name) {
+    if (!name) return null;
+    const safe = typeof path !== 'undefined' && path.basename ? path.basename(name, '.nsh') : name.replace(/\.nsh$/i, '');
+    const all = document.querySelectorAll('.save');
+    for (const el of all) {
+        if (el.getAttribute('data-file') === safe || el.getAttribute('file-name') === safe) {
+            return el;
+        }
+    }
+    return null;
+}
 
-//Content
+// Global DOM elements
+const content = document.getElementById('content');
 const textTitle = document.querySelector('.text-title');
+const activeDocTitle = document.getElementById('active-doc-title');
+const unsavedDot = document.querySelector('.unsaved-dot');
 
-const home = `
-    <h1>Version 1.3 Alpha Test Version</h1>
-    <img width="400px" src="src/drive.png">
-    <h2>Google Drive is now ready for testing!</h3>
-    <h3>You can connect your Google Drive account to Nosh and sync your files easily. This is a test version, so please try it out and share your feedback. Your thoughts will help us make it better!</h3>
-    <h3>Thank you for using Nosh!</h3>
-    <br>
-    <h2>1.3.1 Patch</h3>
-    <h3>🔎 Fixed search.</h3>
-    <br>
-    <h1>1.3.2 Patch</h1>
-    <h3>🚀 Now you can <span style="color: #894FDCFF; font-size: inherit;">publish</span> your files on the <span style="color: #894FDCFF; font-size: inherit;">web</span>.</h3>
-    <h3>🎨 Enjoy the all-new, reimagined Settings UI.</h3>
+// Modern Welcome Dashboard Template (Fallback)
+const welcomeDashboard = `
+    <div class="welcome-dashboard">
+        <div class="welcome-hero">
+            <div class="hero-logo-wrap">
+                <img src="icon.png" class="hero-icon" alt="Nosh">
+            </div>
+            <h1 class="hero-title">Welcome to Nosh</h1>
+            <p class="hero-subtitle">A high-craft, distraction-free note & code workstation built for programmers and thinkers.</p>
+        </div>
+
+        <div class="quick-action-cards">
+            <div class="quick-card" onclick="createNewFile()">
+                <div class="card-icon-wrap primary">
+                    <iconify-icon class="card-icon" icon="solar:document-add-linear"></iconify-icon>
+                </div>
+                <div class="card-title">New Note</div>
+                <div class="card-desc">Create a new empty note with rich formatting & code blocks.</div>
+                <span class="card-badge">Ctrl + N</span>
+            </div>
+
+            <div class="quick-card" onclick="openFileFromSystem()">
+                <div class="card-icon-wrap">
+                    <iconify-icon class="card-icon" icon="solar:folder-open-linear"></iconify-icon>
+                </div>
+                <div class="card-title">Open Note</div>
+                <div class="card-desc">Open an existing .nsh note file from your computer.</div>
+                <span class="card-badge">Ctrl + O</span>
+            </div>
+
+            <div class="quick-card" onclick="openSettingsModal()">
+                <div class="card-icon-wrap">
+                    <iconify-icon class="card-icon" icon="solar:tuning-2-linear"></iconify-icon>
+                </div>
+                <div class="card-title">Preferences</div>
+                <div class="card-desc">Customize typography, code themes, Drive & YouTube player.</div>
+                <span class="card-badge">Ctrl + ,</span>
+            </div>
+        </div>
+
+        <div class="shortcuts-panel">
+            <h4>Productivity Shortcuts</h4>
+            <div class="shortcuts-grid">
+                <div class="shortcut-row"><span>New Note</span><span class="kbd">Ctrl + N</span></div>
+                <div class="shortcut-row"><span>Save Note</span><span class="kbd">Ctrl + S</span></div>
+                <div class="shortcut-row"><span>Search Notes</span><span class="kbd">Ctrl + F</span></div>
+                <div class="shortcut-row"><span>Command Palette</span><span class="kbd">Ctrl + K</span></div>
+                <div class="shortcut-row"><span>Toggle Sidebar</span><span class="kbd">Ctrl + \\</span></div>
+                <div class="shortcut-row"><span>Exit Code Block</span><span class="kbd">Shift + Enter</span></div>
+            </div>
+        </div>
+    </div>
 `;
 
-content.innerHTML = home;
-textTitle.textContent = 'Home';
-
-if(localStorage.getItem('code-theme') === null) {
-    localStorage.setItem('code-theme', 'darcula');
+// Initialize default code theme if not set
+if (!localStorage.getItem('code-theme')) {
+    localStorage.setItem('code-theme', 'dracula');
 }

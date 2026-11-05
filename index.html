@@ -3,494 +3,1813 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob: file:; img-src 'self' https: http: data: blob: file:; media-src 'self' https: http: data: blob: file:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://code.iconify.design https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; frame-src 'self' https: http://127.0.0.1:* http://localhost:*;">
     <title>nosh</title>
-    <link rel="stylesheet" href="dark.css">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    
+    <!-- CodeMirror & Themes -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/roundSlider/1.3.2/roundslider.min.css" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
-    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
-    <!-- codemirror -->
-    <link rel="stylesheet" href="src/code-theme/3024-day.css">
-    <link rel="stylesheet" href="src/code-theme/3024-night.css">
-    <link rel="stylesheet" href="src/code-theme/abbott.css">
-    <link rel="stylesheet" href="src/code-theme/abcdef.css">
-    <link rel="stylesheet" href="src/code-theme/ambiance.css">
-    <link rel="stylesheet" href="src/code-theme/ambiance-mobile.css">
-    <link rel="stylesheet" href="src/code-theme/ayu-dark.css">
-    <link rel="stylesheet" href="src/code-theme/ayu-mirage.css">
-    <link rel="stylesheet" href="src/code-theme/base16-dark.css">
-    <link rel="stylesheet" href="src/code-theme/base16-light.css">
-    <link rel="stylesheet" href="src/code-theme/bespin.css">
-    <link rel="stylesheet" href="src/code-theme/blackboard.css">
-    <link rel="stylesheet" href="src/code-theme/cobalt.css">
-    <link rel="stylesheet" href="src/code-theme/colorforth.css">
     <link rel="stylesheet" href="src/code-theme/darcula.css">
     <link rel="stylesheet" href="src/code-theme/dracula.css">
-    <link rel="stylesheet" href="src/code-theme/duotone-dark.css">
-    <link rel="stylesheet" href="src/code-theme/duotone-light.css">
-    <link rel="stylesheet" href="src/code-theme/eclipse.css">
-    <link rel="stylesheet" href="src/code-theme/elegant.css">
-    <link rel="stylesheet" href="src/code-theme/erlang-dark.css">
-    <link rel="stylesheet" href="src/code-theme/gruvbox-dark.css">
-    <link rel="stylesheet" href="src/code-theme/hopscotch.css">
-    <link rel="stylesheet" href="src/code-theme/icecoder.css">
-    <link rel="stylesheet" href="src/code-theme/idea.css">
-    <link rel="stylesheet" href="src/code-theme/isotope.css">
-    <link rel="stylesheet" href="src/code-theme/juejin.css">
-    <link rel="stylesheet" href="src/code-theme/lesser-dark.css">
-    <link rel="stylesheet" href="src/code-theme/liquibyte.css">
-    <link rel="stylesheet" href="src/code-theme/lucario.css">
     <link rel="stylesheet" href="src/code-theme/material.css">
-    <link rel="stylesheet" href="src/code-theme/material-darker.css">
-    <link rel="stylesheet" href="src/code-theme/material-ocean.css">
-    <link rel="stylesheet" href="src/code-theme/material-palenight.css">
-    <link rel="stylesheet" href="src/code-theme/mbo.css">
-    <link rel="stylesheet" href="src/code-theme/mdn-like.css">
-    <link rel="stylesheet" href="src/code-theme/midnight.css">
     <link rel="stylesheet" href="src/code-theme/monokai.css">
-    <link rel="stylesheet" href="src/code-theme/moxer.css">
-    <link rel="stylesheet" href="src/code-theme/neat.css">
-    <link rel="stylesheet" href="src/code-theme/neo.css">
-    <link rel="stylesheet" href="src/code-theme/night.css">
     <link rel="stylesheet" href="src/code-theme/nord.css">
-    <link rel="stylesheet" href="src/code-theme/oceanic-next.css">
-    <link rel="stylesheet" href="src/code-theme/panda-syntax.css">
-    <link rel="stylesheet" href="src/code-theme/paraiso-dark.css">
-    <link rel="stylesheet" href="src/code-theme/paraiso-light.css">
-    <link rel="stylesheet" href="src/code-theme/pastel-on-dark.css">
-    <link rel="stylesheet" href="src/code-theme/railscasts.css">
-    <link rel="stylesheet" href="src/code-theme/rubyblue.css">
-    <link rel="stylesheet" href="src/code-theme/seti.css">
-    <link rel="stylesheet" href="src/code-theme/shadowfox.css">
     <link rel="stylesheet" href="src/code-theme/solarized.css">
-    <link rel="stylesheet" href="src/code-theme/ssms.css">
-    <link rel="stylesheet" href="src/code-theme/the-matrix.css">
-    <link rel="stylesheet" href="src/code-theme/tomorrow-night-bright.css">
-    <link rel="stylesheet" href="src/code-theme/tomorrow-night-eighties.css">
-    <link rel="stylesheet" href="src/code-theme/ttcn.css">
-    <link rel="stylesheet" href="src/code-theme/twilight.css">
-    <link rel="stylesheet" href="src/code-theme/vibrant-ink.css">
-    <link rel="stylesheet" href="src/code-theme/xq-dark.css">
-    <link rel="stylesheet" href="src/code-theme/xq-light.css">
-    <link rel="stylesheet" href="src/code-theme/yeti.css">
-    <link rel="stylesheet" href="src/code-theme/yonce.css">
-    <link rel="stylesheet" href="src/code-theme/zenburn.css">
+    <link rel="stylesheet" href="src/code-theme/icecoder.css">
+    
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="dark.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+    
+    <!-- Iconify & External Libraries -->
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 </head>
 <body>
-    <style class="font-size">
-        #content span, #content p{
-            font-size: 16px;
-            line-height: 16px;
-        }
-    </style>
+    <div class="container">
+        <!-- Single Unified Window Header & Title Bar -->
+        <header class="window-titlebar">
+            <div class="titlebar-left">
+                <div class="app-brand" onclick="showWelcomeDashboard()" style="cursor: pointer;" title="Go to Home Dashboard">
+                    <img src="icon.png" alt="Nosh">
+                    <span>nosh</span>
+                    <span class="version-pill">v1.4</span>
+                </div>
+                <button id="toggle-sidebar-btn" class="titlebar-btn" title="Toggle Sidebar (Ctrl+\)">
+                    <iconify-icon icon="solar:sidebar-minimalistic-linear"></iconify-icon>
+                </button>
+            </div>
+            
+            <div class="titlebar-center">
+                <span class="breadcrumb-prefix">Workspace /</span>
+                <span class="breadcrumb-doc text-title" id="active-doc-title">Home</span>
+                <span class="unsaved-dot" title="Unsaved changes"></span>
+            </div>
 
-    <!-- <div id="search-container">
-        <input type="text" id="searchBar" placeholder="Search..." />
-        <button id="search-button">Find</button>
-        <button id="clear-search">Clear</button>
-    </div> -->
+            <div class="titlebar-right">
+                <button class="win-control minimize" onclick="minimizeWindow()" title="Minimize">
+                    <iconify-icon icon="codicon:chrome-minimize"></iconify-icon>
+                </button>
+                <button class="win-control maximize" onclick="toggleMaximizeWindow()" title="Maximize / Restore">
+                    <iconify-icon id="maximize-icon" icon="codicon:chrome-maximize"></iconify-icon>
+                </button>
+                <button class="win-control close" onclick="closeWindow()" title="Close">
+                    <iconify-icon icon="codicon:chrome-close"></iconify-icon>
+                </button>
+            </div>
+        </header>
 
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Sidebar (Revised Modern Minimalist Design) -->
+            <aside class="left-side">
+                <div class="sidebar-header">
+                    <div class="sidebar-nav-top">
+                        <span class="sidebar-title">
+                            <iconify-icon icon="solar:notes-linear"></iconify-icon>
+                            Notes
+                            <span class="notes-count-badge sk-badge-shimmer" id="notes-count">0</span>
+                        </span>
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                            <button class="titlebar-btn" onclick="showWelcomeDashboard()" title="Home Dashboard">
+                                <iconify-icon icon="solar:home-2-linear"></iconify-icon>
+                            </button>
+                            <button class="titlebar-btn btn-new-note" onclick="createNewFile()" title="New Note (Ctrl+N)">
+                                <iconify-icon icon="solar:document-add-linear"></iconify-icon>
+                            </button>
+                            <button class="titlebar-btn" onclick="openKnowledgeGraph()" title="Knowledge Graph View (Ctrl+G)">
+                                <iconify-icon icon="solar:pie-chart-2-linear"></iconify-icon>
+                            </button>
+                            <button class="titlebar-btn" onclick="readDatabase()" title="Refresh notes from disk">
+                                <iconify-icon icon="solar:restart-linear"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
 
-    <div id="context-menu">
+                    <div class="search-box">
+                        <iconify-icon class="search-icon" icon="solar:magnifer-linear"></iconify-icon>
+                        <input type="text" class="search-input" id="search-input" placeholder="Search notes (Ctrl+F)..." spellcheck="false">
+                        <button class="search-clear" id="search-clear-btn" title="Clear search">
+                            <iconify-icon icon="solar:close-circle-bold"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Notes list -->
+                <nav class="saves" id="saves-container">
+                    <div class="skeleton-note-list" id="sidebar-skeleton-list">
+                        <!-- Pinned Section Header -->
+                        <div class="sk-section-header">
+                            <div class="nosh-skeleton sk-section-icon"></div>
+                            <div class="nosh-skeleton sk-section-title" style="width: 46px;"></div>
+                        </div>
+
+                        <!-- Pinned Note 1 (Rich 2-Line) -->
+                        <div class="skeleton-note-item pinned two-line">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 74%;"></div>
+                                <div class="nosh-skeleton sk-subtitle" style="width: 48%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                                <div class="nosh-skeleton sk-cloud"></div>
+                            </div>
+                        </div>
+
+                        <!-- Pinned Note 2 (1-Line) -->
+                        <div class="skeleton-note-item pinned">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 66%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+
+                        <!-- All Notes Section Header -->
+                        <div class="sk-section-header">
+                            <div class="nosh-skeleton sk-section-icon"></div>
+                            <div class="nosh-skeleton sk-section-title" style="width: 60px;"></div>
+                        </div>
+
+                        <!-- Note Item 1 (Rich 2-Line) -->
+                        <div class="skeleton-note-item two-line">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 82%;"></div>
+                                <div class="nosh-skeleton sk-subtitle" style="width: 58%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+
+                        <!-- Note Item 2 (1-Line) -->
+                        <div class="skeleton-note-item">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 56%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-cloud"></div>
+                            </div>
+                        </div>
+
+                        <!-- Note Item 3 (Rich 2-Line) -->
+                        <div class="skeleton-note-item two-line">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 76%;"></div>
+                                <div class="nosh-skeleton sk-subtitle" style="width: 44%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+
+                        <!-- Note Item 4 (1-Line) -->
+                        <div class="skeleton-note-item">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 68%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+
+                        <!-- Note Item 5 (Rich 2-Line) -->
+                        <div class="skeleton-note-item two-line">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 86%;"></div>
+                                <div class="nosh-skeleton sk-subtitle" style="width: 52%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+
+                        <!-- Note Item 6 (1-Line) -->
+                        <div class="skeleton-note-item">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 60%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+
+                        <!-- Note Item 7 (1-Line) -->
+                        <div class="skeleton-note-item">
+                            <div class="nosh-skeleton sk-icon"></div>
+                            <div class="sk-body">
+                                <div class="nosh-skeleton sk-title" style="width: 72%;"></div>
+                            </div>
+                            <div class="sk-actions-group">
+                                <div class="nosh-skeleton sk-pin"></div>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+
+                <div class="sidebar-empty-state" id="sidebar-empty" style="display: none;">
+                    <iconify-icon class="sidebar-empty-icon" icon="solar:documents-minimalistic-linear"></iconify-icon>
+                    <p style="font-size: 12px;">No matching notes</p>
+                </div>
+
+                <!-- YouTube Companion Player Widget -->
+                <div class="youtube-widget" id="youtube-widget">
+                    <div class="youtube-top-bar" id="youtube-top-bar">
+                        <div class="youtube-title-group" id="youtube-title-group" title="Drag to move in floating mode / Click to toggle">
+                            <iconify-icon icon="solar:hamburger-menu-linear" width="14" class="yt-drag-indicator"></iconify-icon>
+                            <iconify-icon icon="logos:youtube-icon" width="16" style="flex-shrink: 0;"></iconify-icon>
+                            <span class="youtube-track-title" id="youtube-track-title">Lofi Girl - Beats to Study to</span>
+                        </div>
+                        <div class="youtube-top-actions">
+                            <button class="youtube-icon-btn" id="youtube-stations-btn" onclick="toggleYouTubeStationsMenu(event)" title="Preset Radio Stations">
+                                <iconify-icon icon="solar:radio-linear"></iconify-icon>
+                            </button>
+                            <button class="youtube-icon-btn" onclick="openYouTubeUrlModal()" title="Load Custom YouTube Link / Playlist">
+                                <iconify-icon icon="solar:link-circle-linear"></iconify-icon>
+                            </button>
+                            <button class="youtube-icon-btn" id="youtube-float-btn" onclick="toggleYouTubeFloat()" title="Float Player in Workspace">
+                                <iconify-icon id="youtube-float-icon" icon="solar:pip-linear"></iconify-icon>
+                            </button>
+                            <button class="youtube-icon-btn" id="youtube-minimize-btn" onclick="toggleYouTubeMinimize(event)" title="Minimize Player">
+                                <iconify-icon id="youtube-minimize-icon" icon="solar:alt-arrow-down-linear"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Radio Stations Popover Dropdown -->
+                    <div class="yt-stations-popover" id="yt-stations-popover" style="display: none;">
+                        <div class="yt-stations-header">
+                            <span>Focus Radio Stations</span>
+                        </div>
+                        <div class="yt-stations-list">
+                            <button class="yt-station-item" data-video-id="tRsQsTMvPNg" onclick="selectStationPreset('tRsQsTMvPNg', 'Claude FM')">
+                                <span class="yt-station-emoji">🤖</span>
+                                <div class="yt-station-info">
+                                    <span class="yt-station-name">Claude FM</span>
+                                    <span class="yt-station-desc">Music for Thinking & Building</span>
+                                </div>
+                            </button>
+                            <button class="yt-station-item active" data-video-id="rFZHOHl-L8A" onclick="selectStationPreset('rFZHOHl-L8A', 'Lofi Girl')">
+                                <span class="yt-station-emoji">☕</span>
+                                <div class="yt-station-info">
+                                    <span class="yt-station-name">Lofi Girl</span>
+                                    <span class="yt-station-desc">Beats to Relax / Study</span>
+                                </div>
+                            </button>
+                            <button class="yt-station-item" data-video-id="5yx6BWlEVcY" onclick="selectStationPreset('5yx6BWlEVcY', 'Chillhop')">
+                                <span class="yt-station-emoji">🎧</span>
+                                <div class="yt-station-info">
+                                    <span class="yt-station-name">Chillhop</span>
+                                    <span class="yt-station-desc">Jazzy & Lofi Hip Hop</span>
+                                </div>
+                            </button>
+                            <button class="yt-station-item" data-video-id="4xDzrJKXOOY" onclick="selectStationPreset('4xDzrJKXOOY', 'Synthwave')">
+                                <span class="yt-station-emoji">🌆</span>
+                                <div class="yt-station-info">
+                                    <span class="yt-station-name">Synthwave</span>
+                                    <span class="yt-station-desc">Retro / Chillwave Radio</span>
+                                </div>
+                            </button>
+                            <button class="yt-station-item" data-video-id="2OEL4P1Rz04" onclick="selectStationPreset('2OEL4P1Rz04', 'Coffee Rain')">
+                                <span class="yt-station-emoji">🌧️</span>
+                                <div class="yt-station-info">
+                                    <span class="yt-station-name">Coffee Rain</span>
+                                    <span class="yt-station-desc">Cozy Ambient & Rain</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="youtube-body" id="youtube-body">
+                        <!-- Responsive Video Frame with Click-to-Play Overlay & Overlaid Controls -->
+                        <div class="youtube-frame-wrapper" id="youtube-frame-wrapper">
+                            <iframe id="youtube-iframe" src="" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                            
+                            <!-- Video Loading Waveform Skeleton -->
+                            <div class="youtube-skeleton-frame hidden" id="youtube-skeleton-frame">
+                                <div class="sk-waveform-wrap">
+                                    <div class="sk-waveform-bar"></div>
+                                    <div class="sk-waveform-bar"></div>
+                                    <div class="sk-waveform-bar"></div>
+                                    <div class="sk-waveform-bar"></div>
+                                    <div class="sk-waveform-bar"></div>
+                                </div>
+                                <div class="nosh-skeleton" style="width: 140px; height: 11px; border-radius: 4px;"></div>
+                            </div>
+
+                            <!-- Video Poster / Thumbnail Cover (Minimal Play Button) -->
+                            <div class="yt-poster-overlay" id="yt-poster-overlay" onclick="toggleYouTubePlay()" title="Click to Play Video">
+                                <div id="yt-poster-img" class="yt-poster-img"></div>
+                                <div class="yt-poster-play-btn">
+                                    <iconify-icon icon="solar:play-bold"></iconify-icon>
+                                </div>
+                            </div>
+
+                            <!-- Video Click Area (Click to Play/Pause) -->
+                            <div class="youtube-frame-overlay" id="youtube-frame-overlay" onclick="toggleYouTubePlay()" title="Click to Play / Pause"></div>
+
+                            <!-- Overlaid Controls on Video Frame -->
+                            <div class="youtube-video-controls" id="youtube-video-controls" onclick="event.stopPropagation()">
+                                <!-- Full-Width Seek Bar -->
+                                <div class="yt-seek-wrapper">
+                                    <input type="range" id="yt-seek-bar" class="yt-seek-bar" min="0" max="100" value="0" step="0.5" oninput="handleSeekInput(this.value)" onchange="handleSeekChange(this.value)" title="Seek position">
+                                </div>
+                                <!-- Time & Volume Control Row -->
+                                <div class="yt-controls-row">
+                                    <div class="yt-time-display" id="yt-time-display">
+                                        <span class="yt-time-text" id="yt-current-time">0:00</span>
+                                        <span class="yt-time-divider">/</span>
+                                        <span class="yt-time-text" id="yt-duration-time">0:00</span>
+                                    </div>
+                                    <div class="yt-vol-group">
+                                        <button class="yt-ctrl-btn" id="yt-mute-btn" onclick="toggleYouTubeMute()" title="Mute / Unmute">
+                                            <iconify-icon id="yt-mute-icon" icon="solar:volume-loud-bold"></iconify-icon>
+                                        </button>
+                                        <div class="yt-volume-wrapper">
+                                            <input type="range" id="yt-volume-slider" class="yt-volume-slider" min="0" max="100" value="80" oninput="handleYouTubeVolume(this.value)" title="Volume">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invisible Edge & Corner Resize Handles for Floating Player -->
+                    <div class="yt-resizer resizer-n" data-dir="n"></div>
+                    <div class="yt-resizer resizer-s" data-dir="s"></div>
+                    <div class="yt-resizer resizer-e" data-dir="e"></div>
+                    <div class="yt-resizer resizer-w" data-dir="w"></div>
+                    <div class="yt-resizer resizer-nw" data-dir="nw"></div>
+                    <div class="yt-resizer resizer-ne" data-dir="ne"></div>
+                    <div class="yt-resizer resizer-sw" data-dir="sw"></div>
+                    <div class="yt-resizer resizer-se" data-dir="se"></div>
+                </div>
+
+                <!-- Sidebar Placeholder when floating -->
+                <div class="youtube-sidebar-placeholder" id="youtube-sidebar-placeholder" onclick="toggleYouTubeFloat(false)" title="Click to dock player back to sidebar">
+                    <iconify-icon icon="logos:youtube-icon" width="14"></iconify-icon>
+                    <span>Player Floating (Click to Dock)</span>
+                </div>
+
+                <!-- Sidebar Footer -->
+                <footer class="sidebar-footer">
+                    <button class="footer-btn" onclick="openSettingsModal()" title="Settings (Ctrl+,)">
+                        <iconify-icon icon="solar:settings-linear" width="16"></iconify-icon>
+                        Settings
+                    </button>
+                    <button class="footer-btn" onclick="openNotesFolder()" title="Open Notes Folder in Explorer">
+                        <iconify-icon icon="solar:folder-with-files-linear" width="16"></iconify-icon>
+                        Explorer
+                    </button>
+                </footer>
+            </aside>
+
+            <!-- Editor Section -->
+            <section class="right-side">
+                <!-- Floating In-Document Find & Replace Bar -->
+                <div class="editor-find-bar" id="editor-find-bar" style="display: none;">
+                    <div class="find-row">
+                        <div class="find-input-wrap">
+                            <iconify-icon icon="solar:magnifer-linear" class="find-icon"></iconify-icon>
+                            <input type="text" id="doc-find-input" placeholder="Find in document..." oninput="performDocSearch(false)">
+                            <span class="find-counter" id="doc-find-counter">0/0</span>
+                        </div>
+                        <button class="find-action-btn" onclick="findPrevMatch()" title="Previous Match (Shift+Enter)">
+                            <iconify-icon icon="solar:arrow-up-linear"></iconify-icon>
+                        </button>
+                        <button class="find-action-btn" onclick="findNextMatch()" title="Next Match (Enter)">
+                            <iconify-icon icon="solar:arrow-down-linear"></iconify-icon>
+                        </button>
+                        <button class="find-action-btn" id="find-toggle-replace" onclick="toggleReplaceRow()" title="Toggle Replace">
+                            <iconify-icon icon="solar:pen-new-square-linear"></iconify-icon>
+                        </button>
+                        <button class="find-action-btn close" onclick="closeDocFindBar()" title="Close (Escape)">
+                            <iconify-icon icon="solar:close-circle-linear"></iconify-icon>
+                        </button>
+                    </div>
+                    <div class="replace-row" id="replace-row" style="display: none;">
+                        <div class="find-input-wrap">
+                            <iconify-icon icon="solar:pen-linear" class="find-icon"></iconify-icon>
+                            <input type="text" id="doc-replace-input" placeholder="Replace with...">
+                        </div>
+                        <button class="btn-secondary find-btn-sm" onclick="replaceCurrentMatch()">Replace</button>
+                        <button class="btn-secondary find-btn-sm" onclick="replaceAllMatches()">Replace All</button>
+                    </div>
+                </div>
+
+                <!-- Modern Formatting Toolbar -->
+                <div class="toolbar-wrap" id="editor-toolbar">
+                    <div class="toolbar-tools" id="toolbar-tools">
+                        <!-- File Actions Dropdown -->
+                    <div class="toolbar-dropdown">
+                        <button class="dropdown-trigger" onclick="toggleDropdown('file-dropdown', this)">
+                            File <iconify-icon icon="solar:alt-arrow-down-linear"></iconify-icon>
+                        </button>
+                        <div class="dropdown-menu" id="file-dropdown">
+                            <div class="dropdown-item" onclick="createNewFile(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:pen-new-square-linear"></iconify-icon> New Note
+                            </div>
+                            <div class="dropdown-item" onclick="openTemplateModal(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:layers-minimalistic-linear"></iconify-icon> New from Template...
+                            </div>
+                            <div class="dropdown-item" onclick="openFileFromSystem(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:folder-open-linear"></iconify-icon> Open File...
+                            </div>
+                            <div class="dropdown-item" onclick="saveFile(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:diskette-linear"></iconify-icon> Save (Ctrl+S)
+                            </div>
+                            <div class="dropdown-item" onclick="saveAsDialog(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:copy-linear"></iconify-icon> Save As...
+                            </div>
+                            <div class="dropdown-item" onclick="exportToMarkdown(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:document-add-linear"></iconify-icon> Export as Markdown (.md)
+                            </div>
+                            <div class="dropdown-item" onclick="copyAsMarkdown(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:copy-linear"></iconify-icon> Copy as Markdown
+                            </div>
+                            <div class="dropdown-item" onclick="exportToPdf(); closeAllDropdowns();">
+                                <iconify-icon icon="solar:file-text-linear"></iconify-icon> Export as PDF
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <!-- Headings Dropdown -->
+                    <div class="toolbar-dropdown">
+                        <button class="dropdown-trigger" onclick="toggleDropdown('format-dropdown', this)">
+                            Format <iconify-icon icon="solar:alt-arrow-down-linear"></iconify-icon>
+                        </button>
+                        <div class="dropdown-menu" id="format-dropdown">
+                            <div class="dropdown-item" onclick="formatDoc('formatBlock', 'p'); closeAllDropdowns();">Paragraph</div>
+                            <div class="dropdown-item" onclick="formatDoc('formatBlock', 'h1'); closeAllDropdowns();">Heading 1</div>
+                            <div class="dropdown-item" onclick="formatDoc('formatBlock', 'h2'); closeAllDropdowns();">Heading 2</div>
+                            <div class="dropdown-item" onclick="formatDoc('formatBlock', 'h3'); closeAllDropdowns();">Heading 3</div>
+                            <div class="dropdown-item" onclick="formatDoc('formatBlock', 'h4'); closeAllDropdowns();">Heading 4</div>
+                            <div class="dropdown-item" onclick="formatDoc('formatBlock', 'blockquote'); closeAllDropdowns();">Quote Block</div>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <!-- Text Styles Group -->
+                    <div class="toolbar-group">
+                        <button class="toolbar-btn" onclick="formatDoc('bold')" title="Bold (Ctrl+B)">
+                            <iconify-icon icon="solar:text-bold-bold"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('italic')" title="Italic (Ctrl+I)">
+                            <iconify-icon icon="solar:text-italic-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('underline')" title="Underline (Ctrl+U)">
+                            <iconify-icon icon="solar:text-underline-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('strikethrough')" title="Strikethrough">
+                            <iconify-icon icon="solar:text-cross-linear"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <!-- Custom Color Pickers Group -->
+                    <div class="toolbar-group">
+                        <button class="toolbar-btn color-popover-trigger" id="text-color-btn" onclick="openCustomColorPicker('foreColor', this)" title="Text Color">
+                            <iconify-icon icon="solar:text-linear"></iconify-icon>
+                            <span class="color-indicator-bar" id="text-color-indicator"></span>
+                        </button>
+                        <button class="toolbar-btn color-popover-trigger" id="bg-color-btn" onclick="openCustomColorPicker('hiliteColor', this)" title="Highlight Color">
+                            <iconify-icon icon="solar:paint-roller-linear"></iconify-icon>
+                            <span class="color-indicator-bar" id="bg-color-indicator"></span>
+                        </button>
+                    </div>
+
+                    <!-- Alignment Group (Lucide icons guaranteed to render center) -->
+                    <div class="toolbar-group">
+                        <button class="toolbar-btn" onclick="formatDoc('justifyLeft')" title="Align Left">
+                            <iconify-icon icon="lucide:align-left"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('justifyCenter')" title="Align Center">
+                            <iconify-icon icon="lucide:align-center"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('justifyRight')" title="Align Right">
+                            <iconify-icon icon="lucide:align-right"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <!-- Lists & Tasks Group -->
+                    <div class="toolbar-group">
+                        <button class="toolbar-btn" onclick="formatDoc('insertUnorderedList')" title="Bullet List">
+                            <iconify-icon icon="solar:list-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('insertOrderedList')" title="Numbered List">
+                            <iconify-icon icon="solar:list-heart-minimalistic-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="insertChecklist()" title="Insert Task List / Checklist">
+                            <iconify-icon icon="solar:checklist-minimalistic-linear"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <!-- Inserts Group -->
+                    <div class="toolbar-group">
+                        <button class="toolbar-btn" onclick="insertCodeBlockFromSelection()" title="Insert Code Block">
+                            <iconify-icon icon="solar:code-square-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="openLinkModal('url')" title="Insert Link">
+                            <iconify-icon icon="solar:link-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="openInternalLinkModal()" title="Link to Note ([[Note Title]])">
+                            <iconify-icon icon="solar:link-minimalistic-2-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="openMediaModal('image')" title="Insert Image">
+                            <iconify-icon icon="solar:gallery-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="openMediaModal('video')" title="Insert Video">
+                            <iconify-icon icon="solar:videocamera-linear"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <!-- History & Search Group -->
+                    <div class="toolbar-group">
+                        <button class="toolbar-btn" onclick="formatDoc('undo')" title="Undo (Ctrl+Z)">
+                            <iconify-icon icon="solar:undo-left-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="formatDoc('redo')" title="Redo (Ctrl+Y)">
+                            <iconify-icon icon="solar:undo-right-linear"></iconify-icon>
+                        </button>
+                        <button class="toolbar-btn" onclick="openDocFindBar()" title="Find in Document (Ctrl+F)">
+                            <iconify-icon icon="solar:magnifer-linear"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Note Document Actions (Integrated seamlessly on right end of Toolbar) -->
+                <div class="toolbar-actions" id="toolbar-actions">
+                    <button id="drive-sync-btn" class="toolbar-action-btn" onclick="toggleDriveSync()" title="Google Drive Cloud Sync" style="display: none;">
+                        <iconify-icon id="drive-sync-icon" icon="logos:google-drive"></iconify-icon>
+                        <span id="drive-sync-label">Sync</span>
+                    </button>
+                    <button id="share-file" class="toolbar-action-btn primary" title="Publish Note to Web (Cloud)" style="display: none;">
+                        <iconify-icon id="share-file-icon" icon="solar:upload-track-2-bold"></iconify-icon>
+                        <span class="live-dot" id="share-file-dot" style="display: none;"></span>
+                        <span id="share-file-label">Publish</span>
+                    </button>
+                    <button id="delete-note-btn" class="toolbar-action-btn danger" onclick="openDeleteModal()" title="Delete this note" style="display: none;">
+                        <iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon>
+                    </button>
+                </div>
+            </div>
+
+                <!-- Editor Scroll Area -->
+                <div class="editor-scroll" id="editor-scroll-area">
+                    <article id="content" contenteditable="false" spellcheck="false">
+                        <div class="skeleton-dashboard-view" id="dashboard-skeleton-view">
+                            <div class="sk-dash-hero">
+                                <div class="nosh-skeleton sk-dash-logo"></div>
+                                <div class="nosh-skeleton sk-dash-title"></div>
+                                <div class="nosh-skeleton sk-dash-sub"></div>
+                            </div>
+                            <div class="sk-dash-stats">
+                                <div class="sk-dash-stat-pill">
+                                    <div class="nosh-skeleton sk-dash-stat-icon"></div>
+                                    <div class="sk-dash-stat-info">
+                                        <div class="nosh-skeleton" style="width: 45px; height: 18px;"></div>
+                                        <div class="nosh-skeleton" style="width: 90px; height: 11px;"></div>
+                                    </div>
+                                </div>
+                                <div class="sk-dash-stat-pill">
+                                    <div class="nosh-skeleton sk-dash-stat-icon"></div>
+                                    <div class="sk-dash-stat-info">
+                                        <div class="nosh-skeleton" style="width: 45px; height: 18px;"></div>
+                                        <div class="nosh-skeleton" style="width: 80px; height: 11px;"></div>
+                                    </div>
+                                </div>
+                                <div class="sk-dash-stat-pill">
+                                    <div class="nosh-skeleton sk-dash-stat-icon"></div>
+                                    <div class="sk-dash-stat-info">
+                                        <div class="nosh-skeleton" style="width: 55px; height: 18px;"></div>
+                                        <div class="nosh-skeleton" style="width: 85px; height: 11px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="sk-dash-lang-card">
+                                <div class="sk-dash-lang-head">
+                                    <div class="nosh-skeleton" style="width: 90px; height: 14px;"></div>
+                                    <div class="nosh-skeleton" style="width: 140px; height: 11px;"></div>
+                                </div>
+                                <div class="nosh-skeleton sk-dash-lang-bar"></div>
+                                <div class="sk-dash-lang-chips">
+                                    <div class="nosh-skeleton sk-dash-lang-chip"></div>
+                                    <div class="nosh-skeleton sk-dash-lang-chip"></div>
+                                    <div class="nosh-skeleton sk-dash-lang-chip"></div>
+                                    <div class="nosh-skeleton sk-dash-lang-chip"></div>
+                                </div>
+                            </div>
+                            <div class="sk-dash-quick-cards">
+                                <div class="sk-dash-quick-card">
+                                    <div class="nosh-skeleton sk-dash-card-icon"></div>
+                                    <div class="nosh-skeleton" style="width: 80px; height: 15px;"></div>
+                                    <div class="nosh-skeleton" style="width: 90%; height: 11px;"></div>
+                                </div>
+                                <div class="sk-dash-quick-card">
+                                    <div class="nosh-skeleton sk-dash-card-icon"></div>
+                                    <div class="nosh-skeleton" style="width: 80px; height: 15px;"></div>
+                                    <div class="nosh-skeleton" style="width: 90%; height: 11px;"></div>
+                                </div>
+                                <div class="sk-dash-quick-card">
+                                    <div class="nosh-skeleton sk-dash-card-icon"></div>
+                                    <div class="nosh-skeleton" style="width: 90px; height: 15px;"></div>
+                                    <div class="nosh-skeleton" style="width: 90%; height: 11px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- Document Status Bar -->
+                <footer class="editor-status-bar" id="editor-status-bar">
+                    <div class="status-bar-left">
+                        <span class="status-indicator-dot" id="status-sync-dot"></span>
+                        <span class="status-text" id="status-sync-text">Ready</span>
+                        <span class="status-divider">·</span>
+                        <span class="status-text" id="status-active-note">Welcome</span>
+                    </div>
+                    <div class="status-bar-right">
+                        <span class="status-outline" id="status-outline" onclick="toggleDocumentOutline(null, event)" title="Document Outline (Ctrl+Shift+O)">
+                            <iconify-icon icon="solar:list-linear"></iconify-icon> Outline
+                        </span>
+                        <span class="status-divider">·</span>
+                        <span class="status-backlinks" id="status-backlinks" onclick="toggleBacklinksPopover(event)" title="View notes referencing this document">
+                            <iconify-icon icon="solar:link-round-angle-linear"></iconify-icon> <span id="backlinks-count">0</span> backlinks
+                        </span>
+                        <span class="status-divider">·</span>
+                        <span class="status-stat" id="stat-words">0 words</span>
+                        <span class="status-divider">·</span>
+                        <span class="status-stat" id="stat-chars">0 chars</span>
+                        <span class="status-divider">·</span>
+                        <span class="status-stat" id="stat-read-time">0 min read</span>
+                        <span class="status-divider">·</span>
+                        <span class="status-stat" id="stat-code-blocks">0 code blocks</span>
+                    </div>
+                </footer>
+
+                <!-- Document Outline Drawer (Table of Contents & Elements) -->
+                <div class="document-outline-drawer" id="document-outline-drawer">
+                    <div class="outline-header">
+                        <div class="outline-header-left">
+                            <iconify-icon icon="solar:list-linear" class="outline-title-icon"></iconify-icon>
+                            <span>Outline</span>
+                            <span class="outline-count-badge" id="outline-count-badge">0</span>
+                        </div>
+                        <div class="outline-header-right">
+                            <button class="outline-close-btn" onclick="toggleDocumentOutline(false, event)" title="Close Outline">
+                                <iconify-icon icon="solar:close-circle-linear"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="outline-filters" id="outline-filters">
+                        <button class="outline-filter-pill active" data-filter="all" onclick="setOutlineFilter('all')">All</button>
+                        <button class="outline-filter-pill" data-filter="heading" onclick="setOutlineFilter('heading')">Headings</button>
+                        <button class="outline-filter-pill" data-filter="code" onclick="setOutlineFilter('code')">Code</button>
+                        <button class="outline-filter-pill" data-filter="task" onclick="setOutlineFilter('task')">Tasks</button>
+                    </div>
+                    <div class="outline-list" id="outline-list">
+                        <!-- Dynamically populated from headings, code blocks, tasks, media -->
+                    </div>
+                </div>
+
+                <!-- Backlinks Popover -->
+                <div id="backlinks-popover" class="backlinks-popover" style="display: none;">
+                    <div class="backlinks-header">
+                        <span>Referenced In (Backlinks)</span>
+                        <iconify-icon icon="solar:close-circle-linear" style="cursor: pointer;" onclick="closeBacklinksPopover()"></iconify-icon>
+                    </div>
+                    <div id="backlinks-list" style="display: flex; flex-direction: column; gap: 4px;">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals & Dialogs Overlay -->
+    <div class="overlay" id="global-overlay" onclick="closeAllModals()"></div>
+
+    <!-- YouTube Custom URL Modal -->
+    <div class="modal-container" id="youtube-url-modal" style="width: 480px;">
+        <div class="modal-header">
+            <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px;">
+                <iconify-icon icon="logos:youtube-icon" width="18"></iconify-icon>
+                <span>Play YouTube Video or Playlist</span>
+            </h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px;">
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+                Enter any YouTube video link, playlist URL, or 11-character video ID to stream while writing:
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+                <input type="text" id="youtube-modal-url-input" class="form-control" placeholder="https://www.youtube.com/watch?v=... or playlist URL" style="width: 100%; padding: 9px 12px; font-size: 12.5px; border-radius: var(--radius-sm); background: var(--bg-surface); border: 1px solid var(--border-medium); color: var(--text-primary); outline: none;" onkeydown="if(event.key==='Enter') submitYouTubeModalUrl()">
+                <span style="font-size: 11px; color: var(--text-muted);">Supports standard videos, music streams, and public YouTube playlists.</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Curated Focus Stations</span>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button class="yt-preset-chip" onclick="loadYouTubeVideo('tRsQsTMvPNg', 'Claude FM'); closeAllModals();">🤖 Claude FM</button>
+                    <button class="yt-preset-chip" onclick="loadYouTubeVideo('rFZHOHl-L8A', 'Lofi Girl'); closeAllModals();">☕ Lofi Girl</button>
+                    <button class="yt-preset-chip" onclick="loadYouTubeVideo('5yx6BWlEVcY', 'Chillhop'); closeAllModals();">🎧 Chillhop</button>
+                    <button class="yt-preset-chip" onclick="loadYouTubeVideo('4xDzrJKXOOY', 'Synthwave'); closeAllModals();">🌆 Synthwave</button>
+                    <button class="yt-preset-chip" onclick="loadYouTubeVideo('2OEL4P1Rz04', 'Coffee Rain'); closeAllModals();">🌧️ Coffee Rain</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px;">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" onclick="submitYouTubeModalUrl()" style="background: var(--youtube); border-color: var(--youtube); color: #fff; display: flex; align-items: center; gap: 6px;">
+                <iconify-icon icon="solar:play-bold"></iconify-icon> Play Video
+            </button>
+        </div>
+    </div>
+
+    <!-- 1. Delete Note Confirmation Modal -->
+    <div class="modal-container delete-dialog" id="delete-modal">
+        <div class="modal-header">
+            <h3>Delete Note</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body">
+            <div class="delete-warning-icon">
+                <iconify-icon icon="solar:trash-bin-trash-bold"></iconify-icon>
+            </div>
+            <h4 style="color: #fff; font-size: 15px;">Are you sure?</h4>
+            <p id="delete-modal-msg" style="color: var(--text-secondary); font-size: 13px;">This note will be permanently deleted from your computer.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-danger" id="confirm-delete-btn" onclick="confirmDeleteActiveNote()">Delete Permanently</button>
+        </div>
+    </div>
+
+    <!-- Google Drive Sync Confirmation Modal -->
+    <div class="modal-container drive-sync-dialog" id="drive-sync-modal">
+        <div class="modal-header">
+            <h3 id="drive-sync-modal-title">Google Drive Sync</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body">
+            <div class="drive-sync-dialog-icon" id="drive-sync-modal-icon-wrap">
+                <iconify-icon id="drive-sync-modal-icon" icon="logos:google-drive"></iconify-icon>
+            </div>
+            <h4 id="drive-sync-modal-heading" style="color: #fff; font-size: 15px; margin: 0;">Sync Note to Google Drive?</h4>
+            <p id="drive-sync-modal-msg" style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin: 0;">
+                A copy of this note will be uploaded to Google Drive.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" id="drive-sync-modal-confirm-btn" onclick="confirmDriveSyncAction()">Sync to Drive</button>
+        </div>
+    </div>
+
+    <!-- Rename Note Modal -->
+    <div class="modal-container" id="rename-modal" style="width: 420px; max-width: 90vw;">
+        <div class="modal-header">
+            <h3>Rename Note</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="padding: 20px 24px;">
+            <label class="setting-label" style="display:block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px;">New Note Title</label>
+            <input type="text" id="rename-note-input" class="modal-input" placeholder="Enter note name..." spellcheck="false" autocomplete="off">
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" id="confirm-rename-btn" onclick="confirmRenameNote()">Rename</button>
+        </div>
+    </div>
+
+    <!-- Create Folder Modal -->
+    <div class="modal-container" id="create-folder-modal" style="width: 420px; max-width: 90vw;">
+        <div class="modal-header">
+            <h3>New Folder</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="padding: 20px 24px;">
+            <label class="setting-label" style="display:block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px;">Folder Name</label>
+            <input type="text" id="create-folder-input" class="modal-input" placeholder="e.g. Work, Ideas, Projects..." spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter') confirmCreateFolder();">
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" id="confirm-create-folder-btn" onclick="confirmCreateFolder()">Create Folder</button>
+        </div>
+    </div>
+
+    <!-- Rename Folder Modal -->
+    <div class="modal-container" id="rename-folder-modal" style="width: 420px; max-width: 90vw;">
+        <div class="modal-header">
+            <h3>Rename Folder</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="padding: 20px 24px;">
+            <label class="setting-label" style="display:block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px;">New Folder Name</label>
+            <input type="text" id="rename-folder-input" class="modal-input" placeholder="Enter folder name..." spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter') confirmRenameFolder();">
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" id="confirm-rename-folder-btn" onclick="confirmRenameFolder()">Rename</button>
+        </div>
+    </div>
+
+    <!-- Delete Folder Confirmation Modal -->
+    <div class="modal-container delete-dialog" id="delete-folder-modal" style="width: 420px; max-width: 90vw;">
+        <div class="modal-header">
+            <h3>Delete Folder</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="text-align: center; padding: 24px 20px;">
+            <div class="delete-warning-icon">
+                <iconify-icon icon="solar:trash-bin-trash-bold"></iconify-icon>
+            </div>
+            <h4 style="color: #fff; font-size: 15px; margin-top: 12px; margin-bottom: 6px;">Delete Folder?</h4>
+            <p id="delete-folder-modal-msg" style="color: var(--text-secondary); font-size: 13px; margin: 0;">Notes inside will not be deleted, they will be moved back to General Notes.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-danger" id="confirm-delete-folder-btn" onclick="confirmDeleteFolder()">Delete Folder</button>
+        </div>
+    </div>
+
+    <!-- Move Note to Folder Modal -->
+    <div class="modal-container" id="move-to-folder-modal" style="width: 450px; max-width: 92vw;">
+        <div class="modal-header">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+                <h3 style="margin: 0;">Move to Folder</h3>
+                <span id="move-to-folder-subtitle" style="font-size: 11.5px; color: var(--text-muted); font-weight: 400; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+            </div>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Create New Folder & Move section -->
+            <div class="move-create-folder-bar">
+                <div class="move-create-folder-input-wrap">
+                    <iconify-icon icon="solar:folder-add-linear"></iconify-icon>
+                    <input type="text" id="move-new-folder-input" placeholder="Create new folder..." autocomplete="off">
+                </div>
+                <button class="btn-primary move-create-folder-btn" id="move-create-folder-btn" onclick="confirmCreateFolderAndMove()">
+                    <iconify-icon icon="solar:add-circle-linear"></iconify-icon>
+                    Create & Move
+                </button>
+            </div>
+
+            <div class="move-divider-label">
+                <span>or select an existing folder</span>
+            </div>
+
+            <div id="move-folder-list" class="move-folder-list" style="max-height: 240px; overflow-y: auto;">
+                <!-- Dynamically populated in folders.js -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- 2. Code Block Language Selector Modal -->
+    <div class="modal-container language-dialog" id="language-modal">
+        <div class="modal-header">
+            <h3>Insert Code Block</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body">
+            <div class="lang-search-wrap">
+                <input type="text" id="lang-search-input" placeholder="Search language (e.g. python, rust, javascript)..." oninput="filterLanguages()" style="width: 100%;">
+            </div>
+            <div class="popular-langs">
+                <button class="popular-lang-chip" onclick="createCodeBlock('python', 'Python')"><iconify-icon icon="logos:python"></iconify-icon> Python</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('javascript', 'JavaScript')"><iconify-icon icon="logos:javascript"></iconify-icon> JavaScript</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('javascript', 'TypeScript')"><iconify-icon icon="logos:typescript-icon"></iconify-icon> TypeScript</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('rust', 'Rust')"><iconify-icon icon="logos:rust"></iconify-icon> Rust</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('go', 'Go')"><iconify-icon icon="logos:go"></iconify-icon> Go</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('text/x-c++src', 'C++')"><iconify-icon icon="logos:c-plusplus"></iconify-icon> C++</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('text/x-csharp', 'C#')"><iconify-icon icon="logos:c-sharp"></iconify-icon> C#</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('htmlmixed', 'HTML')"><iconify-icon icon="logos:html-5"></iconify-icon> HTML</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('css', 'CSS')"><iconify-icon icon="logos:css-3"></iconify-icon> CSS</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('sql', 'SQL')"><iconify-icon icon="vscode-icons:file-type-sql"></iconify-icon> SQL</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('shell', 'Bash')"><iconify-icon icon="logos:bash-icon"></iconify-icon> Bash</button>
+                <button class="popular-lang-chip" onclick="createCodeBlock('json', 'JSON')"><iconify-icon icon="vscode-icons:file-type-json"></iconify-icon> JSON</button>
+            </div>
+            <div class="languages-grid" id="languages-grid">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Insert Link Modal (Web URL or Internal Note Reference) -->
+    <div class="modal-container" id="link-modal" style="width: 440px; max-width: 92vw;">
+        <div class="modal-header" style="padding: 14px 20px;">
+            <div class="modal-title-with-icon" style="display: flex; align-items: center; gap: 10px;">
+                <div class="modal-title-badge" style="width: 30px; height: 30px; border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0;">
+                    <iconify-icon icon="solar:link-circle-bold-duotone"></iconify-icon>
+                </div>
+                <h3 id="link-modal-title" style="margin: 0; font-size: 14.5px; font-weight: 600;">Insert Link</h3>
+            </div>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+
+        <div class="modal-body" style="padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Segmented Pill Tabs -->
+            <div class="link-modal-tabs">
+                <button type="button" class="link-tab-btn active" id="link-tab-url" onclick="switchLinkModalTab('url')">
+                    <iconify-icon icon="solar:link-round-angle-bold"></iconify-icon>
+                    <span>Web URL</span>
+                </button>
+                <button type="button" class="link-tab-btn" id="link-tab-note" onclick="switchLinkModalTab('note')">
+                    <iconify-icon icon="solar:document-text-bold"></iconify-icon>
+                    <span>Note</span>
+                </button>
+            </div>
+
+            <!-- Panel 1: Web URL -->
+            <div id="link-panel-url" class="link-panel active">
+                <div class="link-field-group">
+                    <label class="link-field-label" for="link-text-input">Text</label>
+                    <div class="link-input-wrapper">
+                        <iconify-icon icon="solar:text-field-linear" class="link-input-icon"></iconify-icon>
+                        <input type="text" id="link-text-input" class="modal-input link-input" placeholder="Display text (optional)" spellcheck="false" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="link-field-group" style="margin-top: 10px;">
+                    <label class="link-field-label" for="link-url-input">URL</label>
+                    <div class="link-input-wrapper">
+                        <iconify-icon icon="solar:globe-linear" class="link-input-icon"></iconify-icon>
+                        <input type="text" id="link-url-input" class="modal-input link-input" placeholder="https://..." spellcheck="false" autocomplete="off" oninput="updateLinkUrlPreview()">
+                        <button type="button" class="link-action-btn" id="link-paste-btn" onclick="pasteUrlFromClipboard()" title="Paste from clipboard">
+                            <iconify-icon icon="solar:clipboard-linear"></iconify-icon> Paste
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 2: Vault Note -->
+            <div id="link-panel-note" class="link-panel" style="display: none;">
+                <div class="link-field-group">
+                    <label class="link-field-label" for="link-note-text-input">Text</label>
+                    <div class="link-input-wrapper">
+                        <iconify-icon icon="solar:text-field-linear" class="link-input-icon"></iconify-icon>
+                        <input type="text" id="link-note-text-input" class="modal-input link-input" placeholder="Display text (optional)" spellcheck="false" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="link-field-group" style="margin-top: 10px;">
+                    <label class="link-field-label" for="link-note-input">Note</label>
+                    <div class="link-input-wrapper">
+                        <iconify-icon icon="solar:magnifer-linear" class="link-input-icon"></iconify-icon>
+                        <input type="text" id="link-note-input" class="modal-input link-input" placeholder="Search or type note title..." spellcheck="false" autocomplete="off" oninput="filterVaultNotesPicker()">
+                    </div>
+                </div>
+
+                <div class="link-note-picker" id="link-note-picker-list" style="margin-top: 8px;">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="padding: 12px 20px; justify-content: space-between;">
+            <div id="link-modal-left-actions">
+                <button type="button" class="btn-secondary btn-sm danger" id="link-modal-unlink-btn" onclick="removeLinkFromModal()" style="display: none; padding: 6px 12px; gap: 6px;">
+                    <iconify-icon icon="solar:link-broken-linear"></iconify-icon> Remove
+                </button>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+                <button type="button" class="btn-primary" id="confirm-link-btn" onclick="confirmAddLink()">
+                    <span id="confirm-link-btn-text">Insert Link</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Insert Media Modal (Image / Video) -->
+    <div class="modal-container" id="media-modal" style="width: 500px;">
+        <div class="modal-header" style="padding: 16px 20px 12px 20px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="modal-title-badge" id="media-modal-badge" style="width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
+                    <iconify-icon icon="solar:gallery-bold" id="media-modal-icon"></iconify-icon>
+                </div>
+                <div>
+                    <h3 id="media-modal-title" style="margin: 0; font-size: 15px; font-weight: 600;">Insert Media</h3>
+                    <div id="media-modal-subtitle" style="font-size: 11px; color: var(--text-muted); margin-top: 1px;">Upload local file or embed from web URL</div>
+                </div>
+            </div>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+
+        <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+            <!-- Tab switcher -->
+            <div class="media-type-switcher" style="display: flex; gap: 6px; padding: 3px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+                <button type="button" class="media-tab-btn active" id="media-tab-upload" onclick="switchMediaTab('upload')" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; border: none; background: transparent; color: var(--text-secondary); border-radius: 5px; cursor: pointer; transition: all 0.15s ease;">
+                    <iconify-icon icon="solar:upload-track-2-linear"></iconify-icon> Local File
+                </button>
+                <button type="button" class="media-tab-btn" id="media-tab-url" onclick="switchMediaTab('url')" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; border: none; background: transparent; color: var(--text-secondary); border-radius: 5px; cursor: pointer; transition: all 0.15s ease;">
+                    <iconify-icon icon="solar:link-circle-linear"></iconify-icon> Web URL
+                </button>
+            </div>
+
+            <!-- Panel 1: Upload Dropzone -->
+            <div id="media-panel-upload" class="media-panel">
+                <div class="media-dropzone" id="media-dropzone" onclick="document.getElementById('media-file-input').click()">
+                    <input type="file" id="media-file-input" style="display: none;" onchange="handleMediaFileSelect(event)">
+                    <div class="media-dropzone-icon">
+                        <iconify-icon icon="solar:cloud-upload-linear"></iconify-icon>
+                    </div>
+                    <div class="media-dropzone-text" id="media-dropzone-title">Click to browse or drop file here</div>
+                    <div class="media-dropzone-sub" id="media-dropzone-formats">Supports PNG, JPG, GIF, WebP, SVG • Max 10 MB</div>
+                </div>
+
+                <div id="media-selected-file-wrap" style="display: none; margin-top: 10px;">
+                    <div class="media-file-pill">
+                        <iconify-icon icon="solar:file-check-linear" style="color: var(--success); font-size: 16px;"></iconify-icon>
+                        <span id="media-selected-file-name" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">file.png</span>
+                        <span id="media-selected-file-size" style="font-size: 11px; color: var(--text-muted);">1.2 MB</span>
+                        <button type="button" class="media-file-remove-btn" onclick="clearSelectedMediaFile(event)" title="Remove file">
+                            <iconify-icon icon="solar:close-circle-bold"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 2: Web URL -->
+            <div id="media-panel-url" class="media-panel" style="display: none;">
+                <label style="display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px;">URL</label>
+                <div class="link-input-wrapper">
+                    <iconify-icon icon="solar:link-linear" class="link-input-icon"></iconify-icon>
+                    <input type="text" id="media-url-input" class="modal-input link-input" placeholder="https://example.com/asset.png" spellcheck="false" autocomplete="off" oninput="handleMediaUrlInput(this.value)">
+                    <button type="button" class="link-action-btn" onclick="pasteMediaUrlFromClipboard()" title="Paste from clipboard">
+                        <iconify-icon icon="solar:clipboard-linear"></iconify-icon> Paste
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Media Preview Box -->
+            <div id="media-preview-box" style="display: none; margin-top: 2px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Preview</span>
+                    <button type="button" id="media-preview-crop-btn" class="btn-secondary btn-sm" onclick="openCropModalFromMediaModal()" style="padding: 3px 9px; font-size: 11px; height: 24px; display: inline-flex; align-items: center; gap: 5px;">
+                        <iconify-icon icon="solar:crop-minimalistic-linear"></iconify-icon>
+                        <span>Crop Image</span>
+                    </button>
+                </div>
+                <div class="media-preview-container" id="media-preview-container"></div>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button type="button" class="btn-primary" id="media-confirm-btn" onclick="confirmAddMedia()">
+                <iconify-icon icon="solar:import-linear"></iconify-icon>
+                <span id="media-confirm-btn-text">Insert</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 4b. Image Crop Modal -->
+    <div class="modal-container" id="crop-modal" style="width: 640px; max-width: 94vw; z-index: 10050;">
+        <div class="modal-header" style="padding: 14px 20px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="modal-title-badge" style="width: 30px; height: 30px; border-radius: var(--radius-sm); background: var(--accent-subtle); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                    <iconify-icon icon="solar:crop-minimalistic-bold"></iconify-icon>
+                </div>
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Crop Image</h3>
+                        <span id="crop-dimensions-badge" style="font-size: 11px; font-family: var(--font-mono); color: var(--accent); background: var(--accent-subtle); padding: 1px 7px; border-radius: 4px;">0 × 0 px</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 1px;">Drag corners or edges to adjust crop area</div>
+                </div>
+            </div>
+            <button class="modal-close-btn" onclick="closeModal('crop-modal')"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+
+        <div class="modal-body" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Aspect Ratio Toolbar -->
+            <div class="crop-ratio-bar">
+                <span class="crop-ratio-label">Aspect Ratio:</span>
+                <div class="crop-ratio-group">
+                    <button type="button" class="crop-ratio-btn active" data-ratio="free" onclick="setCropAspectRatio(null, this)">Free</button>
+                    <button type="button" class="crop-ratio-btn" data-ratio="1:1" onclick="setCropAspectRatio(1, this)">1:1</button>
+                    <button type="button" class="crop-ratio-btn" data-ratio="16:9" onclick="setCropAspectRatio(16/9, this)">16:9</button>
+                    <button type="button" class="crop-ratio-btn" data-ratio="4:3" onclick="setCropAspectRatio(4/3, this)">4:3</button>
+                </div>
+                <button type="button" class="crop-ratio-btn reset" onclick="resetCropBox()" style="margin-left: auto;" title="Select Full Image">
+                    <iconify-icon icon="solar:restart-linear"></iconify-icon> Reset
+                </button>
+            </div>
+
+            <!-- Interactive Crop Stage -->
+            <div class="crop-stage-wrap" id="crop-stage-wrap">
+                <div class="crop-stage" id="crop-stage">
+                    <img id="crop-source-img" alt="Crop Target" draggable="false">
+                    <div class="crop-selection-box" id="crop-selection-box">
+                        <div class="crop-grid-h"></div>
+                        <div class="crop-grid-v"></div>
+                        <span class="crop-handle nw" data-handle="nw"></span>
+                        <span class="crop-handle n" data-handle="n"></span>
+                        <span class="crop-handle ne" data-handle="ne"></span>
+                        <span class="crop-handle e" data-handle="e"></span>
+                        <span class="crop-handle se" data-handle="se"></span>
+                        <span class="crop-handle s" data-handle="s"></span>
+                        <span class="crop-handle sw" data-handle="sw"></span>
+                        <span class="crop-handle w" data-handle="w"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-subtle);">
+            <button type="button" class="btn-secondary" onclick="closeModal('crop-modal')">Cancel</button>
+            <button type="button" class="btn-primary" onclick="applyImageCrop()">
+                <iconify-icon icon="solar:check-read-linear"></iconify-icon>
+                <span>Apply Crop</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 5. Publish to Web Modal -->
+    <div class="modal-container" id="publish-modal" style="width: 460px;">
+        <div class="modal-header">
+            <h3>Publish Note to Web</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+            <p style="font-size: 13px; color: var(--text-secondary);">
+                Publish this note online instantly to the web via Supabase Cloud. Anyone with the generated link will be able to read your note with full syntax highlighting.
+            </p>
+            <div class="settings-item">
+                <div class="settings-item-info">
+                    <div class="settings-item-label" id="publish-doc-name">Note Name</div>
+                    <div class="settings-item-desc">Will be published as a standalone clean web document.</div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" id="publish-confirm-btn" onclick="executePublishNote()">Publish Online</button>
+        </div>
+    </div>
+
+    <!-- 6. Published Success Modal -->
+    <div class="modal-container" id="publish-success-modal" style="width: 480px;">
+        <div class="modal-header">
+            <h3 style="color: var(--success); display: flex; align-items: center; gap: 6px;">
+                <iconify-icon icon="solar:check-circle-bold"></iconify-icon> Note Published!
+            </h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+            <p style="font-size: 13px; color: var(--text-secondary);">Your note is uploaded and available via the public link below:</p>
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="published-link-input" readonly style="flex: 1; font-family: var(--font-code); font-size: 12px;">
+                <button class="btn-secondary" onclick="copyPublishedLink()">Copy</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Close</button>
+            <button class="btn-primary" onclick="openPublishedUrlExternal()">Open in Browser</button>
+        </div>
+    </div>
+
+    <!-- 6b. Already Published / Manage Live Note Modal -->
+    <div class="modal-container" id="published-status-modal" style="width: 550px; max-width: 95vw;">
+        <div class="modal-header">
+            <h3 style="display: flex; align-items: center; gap: 8px;">
+                <span class="live-dot"></span>
+                <span>Published Note Details</span>
+            </h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="published-status-card">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);" id="published-status-doc-name">Note Name</div>
+                    <span class="published-badge-live">
+                        <span class="live-dot"></span> Live
+                    </span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); display: flex; gap: 14px; flex-wrap: wrap;">
+                    <span id="published-status-first-date">Published: -</span>
+                    <span id="published-status-updated-date">Updated: -</span>
+                </div>
+            </div>
+
+            <!-- Public Link Box -->
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">Public Web Link</label>
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="published-status-link-input" readonly style="flex: 1; font-family: var(--font-code); font-size: 12px; background: var(--bg-app); border: 1px solid var(--border-medium); border-radius: var(--radius-xs); padding: 6px 10px; color: var(--text-primary);">
+                    <button class="btn-secondary" onclick="copyPublishedStatusLink()" title="Copy Link">
+                        <iconify-icon icon="solar:copy-linear"></iconify-icon> Copy
+                    </button>
+                    <button class="btn-secondary" onclick="openPublishedStatusExternal()" title="Open in Browser">
+                        <iconify-icon icon="solar:arrow-right-up-linear"></iconify-icon>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Informational Notice (user's requirement: snapshot remains until update is pressed) -->
+            <div class="published-notice-box">
+                <iconify-icon icon="solar:info-circle-bold" style="color: var(--accent); font-size: 18px; margin-top: 1px; flex-shrink: 0;"></iconify-icon>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                    The live web version stays in its last published state. Any recent changes made in this note will only be pushed online when you click <strong>Update Live Note</strong>.
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap; gap: 8px;">
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                <button class="btn-danger btn-sm" onclick="confirmUnpublishNote()" title="Remove note from published list">
+                    <iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon> Unpublish
+                </button>
+                <button class="btn-secondary btn-sm" onclick="republishAsNewLink()" title="Publish note as a new independent link">
+                    <iconify-icon icon="solar:add-circle-linear"></iconify-icon> New Link
+                </button>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                <button class="btn-secondary btn-sm" onclick="closeAllModals()">Close</button>
+                <button class="btn-primary btn-sm" id="publish-update-btn" onclick="executeUpdatePublishedNote()">
+                    <iconify-icon icon="solar:restart-linear"></iconify-icon> Update Live Note
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6c. Supabase RLS Permission Help Modal -->
+    <div class="modal-container" id="supabase-rls-help-modal" style="width: 520px;">
+        <div class="modal-header">
+            <h3 style="color: var(--warning); display: flex; align-items: center; gap: 6px;">
+                <iconify-icon icon="solar:shield-warning-bold"></iconify-icon> Supabase Permission Setup
+            </h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+            <p style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
+                In-place update requires an <strong>UPDATE</strong> policy in your Supabase project. To update existing live notes under the same link, run this query once in your <strong>Supabase Dashboard &gt; SQL Editor</strong>:
+            </p>
+            <div style="position: relative;">
+                <pre id="supabase-rls-sql-code" style="background: var(--bg-app); border: 1px solid var(--border-medium); border-radius: var(--radius-xs); padding: 10px; font-family: var(--font-code); font-size: 11px; color: #a5f3fc; overflow-x: auto; white-space: pre-wrap; margin: 0;">CREATE POLICY "Allow anon update" ON public.shared_notes FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+GRANT UPDATE ON public.shared_notes TO anon, authenticated;</pre>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary btn-sm" onclick="copySupabaseRlsSql()" style="gap: 4px;">
+                    <iconify-icon icon="solar:copy-linear"></iconify-icon> Copy SQL Command
+                </button>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+                Don't want to configure SQL right now? You can immediately publish as a fresh link instead:
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between;">
+            <button class="btn-secondary" onclick="closeAllModals()">Close</button>
+            <button class="btn-primary" onclick="republishAsNewLink()">
+                <iconify-icon icon="solar:upload-track-2-bold"></iconify-icon> Publish as New Link
+            </button>
+        </div>
+    </div>
+
+    <!-- 7. Command Palette / Quick Switcher Modal -->
+    <div class="modal-container command-palette" id="command-palette-modal">
+        <div class="palette-header">
+            <iconify-icon icon="solar:magnifer-linear" class="palette-search-icon"></iconify-icon>
+            <input type="text" id="palette-input" placeholder="Type a command or search notes (Ctrl+P / Ctrl+K)..." autocomplete="off" spellcheck="false">
+            <span class="palette-esc-badge">ESC</span>
+        </div>
+        <div class="palette-results" id="palette-results">
+            <!-- Dynamic results populated via JS -->
+        </div>
+        <div class="palette-footer">
+            <div class="palette-tip"><span>↑↓</span> to navigate</div>
+            <div class="palette-tip"><span>↵</span> to select</div>
+            <div class="palette-tip"><span>ESC</span> to close</div>
+        </div>
+    </div>
+
+    <!-- 8. Note Templates Modal -->
+    <div class="modal-container" id="template-modal" style="width: 580px;">
+        <div class="modal-header">
+            <h3>Choose Note Template</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">Select an engineering template to scaffold a new structured note instantly:</p>
+            <div class="templates-grid">
+                <div class="template-card" onclick="createNewFromTemplate('rfc')">
+                    <div class="template-icon" style="color: #6366f1;"><iconify-icon icon="solar:layers-minimalistic-bold"></iconify-icon></div>
+                    <div class="template-title">System Design & RFC</div>
+                    <div class="template-desc">Architectural problem statement, TypeScript IPC interface, and delivery checklist.</div>
+                </div>
+                <div class="template-card" onclick="createNewFromTemplate('bug')">
+                    <div class="template-icon" style="color: #ef4444;"><iconify-icon icon="solar:bug-bold"></iconify-icon></div>
+                    <div class="template-title">Bug Postmortem</div>
+                    <div class="template-desc">Symptoms, reproduction steps, Python fix snippet, and preventative actions.</div>
+                </div>
+                <div class="template-card" onclick="createNewFromTemplate('meeting')">
+                    <div class="template-icon" style="color: #10b981;"><iconify-icon icon="solar:users-group-two-rounded-bold"></iconify-icon></div>
+                    <div class="template-title">Meeting Notes</div>
+                    <div class="template-desc">Attendees, objectives, architectural decisions, and task checklists.</div>
+                </div>
+                <div class="template-card" onclick="createNewFromTemplate('daily')">
+                    <div class="template-icon" style="color: #f59e0b;"><iconify-icon icon="solar:calendar-date-bold"></iconify-icon></div>
+                    <div class="template-title">Daily Dev Log</div>
+                    <div class="template-desc">Daily goals checklist, code changes, insights, and blockers.</div>
+                </div>
+                <div class="template-card" onclick="createNewFromTemplate('algo')">
+                    <div class="template-icon" style="color: #8b5cf6;"><iconify-icon icon="solar:code-circle-bold"></iconify-icon></div>
+                    <div class="template-title">Algorithm & Snippet</div>
+                    <div class="template-desc">Complexity analysis, Rust algorithm block, and benchmark notes.</div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- 8. Preferences & Settings Modal (Scrolling Fixed) -->
+    <div class="modal-container settings-dialog" id="settings-modal">
+        <div class="modal-header">
+            <h3>Preferences & Settings</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="settings-layout">
+            <aside class="settings-sidebar">
+                <button class="settings-tab-btn active" onclick="switchSettingsTab('general')">
+                    <iconify-icon icon="solar:tuning-2-linear" width="16"></iconify-icon> General
+                </button>
+                <button class="settings-tab-btn" onclick="switchSettingsTab('code-themes')">
+                    <iconify-icon icon="solar:code-square-linear" width="16"></iconify-icon> Code Themes
+                </button>
+                <button class="settings-tab-btn" onclick="switchSettingsTab('integrations')">
+                    <iconify-icon icon="solar:link-circle-linear" width="16"></iconify-icon> Integrations
+                </button>
+                <button class="settings-tab-btn" onclick="switchSettingsTab('published')">
+                    <iconify-icon icon="solar:upload-track-2-linear" width="16"></iconify-icon> Published
+                </button>
+                <button class="settings-tab-btn" onclick="switchSettingsTab('shortcuts')">
+                    <iconify-icon icon="solar:keyboard-linear" width="16"></iconify-icon> Shortcuts
+                </button>
+                <button class="settings-tab-btn" onclick="switchSettingsTab('trash')">
+                    <iconify-icon icon="solar:trash-bin-trash-linear" width="16"></iconify-icon> Trash & Recovery
+                </button>
+                <button class="settings-tab-btn" onclick="switchSettingsTab('privacy')">
+                    <iconify-icon icon="solar:shield-check-linear" width="16"></iconify-icon> Privacy & Policy
+                </button>
+            </aside>
+
+            <section class="settings-content">
+                <!-- General Pane -->
+                <div class="settings-pane active" id="pane-general">
+                    <div class="settings-section-title">Application Theme</div>
+                    <div class="app-themes-grid">
+                        <div class="app-theme-card active" data-app-theme="dark" onclick="selectAppTheme('dark')">
+                            <div class="theme-swatch dark-swatch">
+                                <span class="swatch-accent"></span>
+                            </div>
+                            <div class="theme-name">Obsidian</div>
+                        </div>
+                        <div class="app-theme-card" data-app-theme="oled" onclick="selectAppTheme('oled')">
+                            <div class="theme-swatch oled-swatch">
+                                <span class="swatch-accent"></span>
+                            </div>
+                            <div class="theme-name">OLED Black</div>
+                        </div>
+                        <div class="app-theme-card" data-app-theme="nord" onclick="selectAppTheme('nord')">
+                            <div class="theme-swatch nord-swatch">
+                                <span class="swatch-accent"></span>
+                            </div>
+                            <div class="theme-name">Nord Slate</div>
+                        </div>
+                        <div class="app-theme-card" data-app-theme="tokyo" onclick="selectAppTheme('tokyo')">
+                            <div class="theme-swatch tokyo-swatch">
+                                <span class="swatch-accent"></span>
+                            </div>
+                            <div class="theme-name">Tokyo Night</div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section-title">Editor Appearance</div>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-label">Default Font Size</div>
+                            <div class="settings-item-desc">Adjust the writing text size (in pixels).</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="setting-font-size" min="11" max="28" value="15" style="width: 60px;">
+                            <span style="color: var(--text-muted); font-size: 12px;">px</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-label">Auto Save Notes</div>
+                            <div class="settings-item-desc">Automatically save changes while typing.</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-auto-save">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-section-title">Storage Location</div>
+                    <div class="settings-item" style="flex-direction: column; align-items: stretch;">
+                        <div class="settings-item-info" style="margin-bottom: 8px;">
+                            <div class="settings-item-label">Notes Directory</div>
+                            <div class="settings-item-desc">All .nsh note files are stored here.</div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="setting-save-path" readonly style="flex: 1; font-family: var(--font-code); font-size: 11px;">
+                            <button class="btn-secondary" onclick="browseSaveDirectory()">Change</button>
+                            <button class="btn-secondary" onclick="resetSaveDirectory()" title="Reset to default">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Themes Pane (Redesigned Split Layout) -->
+                <div class="settings-pane" id="pane-code-themes">
+                    <div class="settings-section-title">Syntax Highlighting Theme</div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Choose the syntax theme applied to all embedded code snippets across your notes.</p>
+                    
+                    <div class="code-themes-layout">
+                        <div class="code-themes-picker-side">
+                            <div class="theme-search-box">
+                                <iconify-icon icon="solar:magnifer-linear"></iconify-icon>
+                                <input type="text" id="theme-search-input" placeholder="Search themes..." oninput="filterSettingsThemes(this.value)">
+                            </div>
+                            <div class="themes-grid" id="themes-grid">
+                                <!-- Populated dynamically via JS -->
+                            </div>
+                        </div>
+                        <div class="code-themes-preview-side">
+                            <div class="theme-preview-label">Theme Live Preview</div>
+                            <div id="settings-theme-preview" class="code-block-wrapper">
+                                <!-- Sample code mirror preview -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Integrations Pane -->
+                <div class="settings-pane" id="pane-integrations">
+                    <div class="settings-section-title">Cloud Storage & Sync</div>
+
+                    <!-- Google Drive Integration Card -->
+                    <div class="integration-card" id="drive-integration-card" style="background: var(--bg-surface); border: 1px solid var(--border-medium); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <iconify-icon icon="logos:google-drive" style="font-size: 26px;"></iconify-icon>
+                                <div>
+                                    <div style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">Google Drive</div>
+                                    <div style="font-size: 11.5px; color: var(--text-muted);" id="drive-status-desc">Sync and back up your notes with Google Drive.</div>
+                                </div>
+                            </div>
+                            <div id="drive-auth-badge">
+                                <span id="drive-status-pill" style="font-size: 11px; padding: 3px 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); color: var(--text-muted); font-weight: 600; border: 1px solid rgba(148, 163, 184, 0.2);">Not Linked</span>
+                            </div>
+                        </div>
+
+                        <!-- Connected Account Info (Visible when linked) -->
+                        <div id="drive-connected-info" style="display: none; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <iconify-icon icon="solar:user-circle-linear" style="font-size: 20px; color: #60a5fa;"></iconify-icon>
+                                    <div>
+                                        <div style="font-size: 12.5px; font-weight: 600; color: #fff;" id="drive-user-email">-</div>
+                                        <div style="font-size: 11px; color: var(--text-muted);">Synced folder: <code style="color: #60a5fa;">noshTheNotepad</code></div>
+                                    </div>
+                                </div>
+                                <span style="font-size: 10.5px; color: #10b981; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                    <iconify-icon icon="solar:check-circle-bold"></iconify-icon> Active
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+                            <div style="font-size: 11px; color: var(--text-muted);">
+                                Notes are synced to your private Drive folder.
+                            </div>
+                            <div id="drive-auth-actions">
+                                <button class="btn-primary" id="drive-connect-btn" onclick="openDriveAuth()" style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <iconify-icon icon="logos:google-icon" width="14"></iconify-icon> Link Google Account
+                                </button>
+                                <button class="btn-danger" id="drive-disconnect-btn" onclick="disconnectDrive()" style="display: none; align-items: center; gap: 6px;">
+                                    <iconify-icon icon="solar:link-broken-linear" width="14"></iconify-icon> Unlink Account
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Restore Missing Notes from Drive -->
+                    <div class="settings-item" id="drive-import-item" style="display: none;">
+                        <div class="settings-item-info">
+                            <div class="settings-item-label">Restore Missing Notes from Drive</div>
+                            <div class="settings-item-desc">Scan your Google Drive folder and restore any notes missing locally.</div>
+                        </div>
+                        <button class="btn-secondary" id="drive-import-btn" onclick="checkNonExistFilesDrive()">
+                            <iconify-icon icon="solar:cloud-download-linear"></iconify-icon> Check Missing Notes
+                        </button>
+                    </div>
+                    <div id="drive-missing-container" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 16px;"></div>
+
+                    <div class="settings-section-title" style="margin-top: 18px;">Sidebar Widgets</div>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-label">YouTube Companion Player</div>
+                            <div class="settings-item-desc">Show or hide the focus music player in the left sidebar.</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-view-youtube">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Published Files Pane (with live preview restored) -->
+                <div class="settings-pane" id="pane-published">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div class="settings-section-title">Published Notes</div>
+                        <button class="btn-secondary" onclick="renderPublishedFilesList()" title="Refresh">
+                            <iconify-icon icon="solar:restart-linear"></iconify-icon> Refresh
+                        </button>
+                    </div>
+                    <div class="published-files-container" id="published-files-list">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+
+                <!-- Shortcuts Pane -->
+                <div class="settings-pane" id="pane-shortcuts">
+                    <div class="settings-section-title">Keyboard Shortcuts</div>
+                    <div class="shortcuts-panel" style="background: transparent; border: none; padding: 0;">
+                        <div class="shortcuts-grid">
+                            <div class="shortcut-row"><span>New Note</span><span class="kbd">Ctrl + N</span></div>
+                            <div class="shortcut-row"><span>Save Note</span><span class="kbd">Ctrl + S</span></div>
+                            <div class="shortcut-row"><span>Quick Switcher</span><span class="kbd">Ctrl + P</span></div>
+                            <div class="shortcut-row"><span>Command Palette</span><span class="kbd">Ctrl + K</span></div>
+                            <div class="shortcut-row"><span>Knowledge Graph</span><span class="kbd">Ctrl + G</span></div>
+                            <div class="shortcut-row"><span>Document Outline</span><span class="kbd">Ctrl + Shift + O</span></div>
+                            <div class="shortcut-row"><span>Focus / Zen Mode</span><span class="kbd">Ctrl + Shift + F</span></div>
+                            <div class="shortcut-row"><span>Find in Document</span><span class="kbd">Ctrl + F</span></div>
+                            <div class="shortcut-row"><span>In-Doc Find & Replace</span><span class="kbd">Ctrl + H</span></div>
+                            <div class="shortcut-row"><span>Search Notes (Sidebar)</span><span class="kbd">Ctrl + Shift + S</span></div>
+                            <div class="shortcut-row"><span>Toggle Sidebar</span><span class="kbd">Ctrl + \</span></div>
+                            <div class="shortcut-row"><span>Preferences</span><span class="kbd">Ctrl + ,</span></div>
+                            <div class="shortcut-row"><span>Bold Text</span><span class="kbd">Ctrl + B</span></div>
+                            <div class="shortcut-row"><span>Italic Text</span><span class="kbd">Ctrl + I</span></div>
+                            <div class="shortcut-row"><span>Underline Text</span><span class="kbd">Ctrl + U</span></div>
+                            <div class="shortcut-row"><span>Exit Code Block</span><span class="kbd">Shift + Enter</span></div>
+                            <div class="shortcut-row"><span>Export as PDF</span><span class="kbd">Ctrl + Shift + P</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trash & Safe Recovery Pane -->
+                <div class="settings-pane" id="pane-trash">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div>
+                            <div class="settings-section-title" style="margin: 0;">Recycle Bin & Safe Trash</div>
+                            <div class="settings-item-desc">Notes in trash can be restored back to your vault or emptied permanently.</div>
+                        </div>
+                        <button class="btn-secondary" id="empty-trash-btn" onclick="confirmEmptyTrash()" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">
+                            <iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon> Empty Trash
+                        </button>
+                    </div>
+                    <div id="trash-notes-list" class="trash-notes-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- Privacy & Policy Pane -->
+                <div class="settings-pane" id="pane-privacy">
+                    <div class="settings-section-title">Privacy & Security Guarantee</div>
+                    
+                    <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <iconify-icon icon="solar:shield-check-bold" style="color: var(--accent); font-size: 22px;"></iconify-icon>
+                            <span style="font-weight: 700; color: var(--text-primary); font-size: 13px;">Nosh Privacy & Security Commitment</span>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                            Nosh is designed on a <strong>local-first</strong> architecture. Your notes, snippets, tokens, and API credentials are kept strictly private on your device and are never sent to external tracking or analytics servers.
+                        </p>
+                    </div>
+
+                    <div class="settings-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <div class="settings-item-label" style="display: flex; align-items: center; gap: 6px;">
+                            <iconify-icon icon="solar:laptop-minimalistic-linear" style="color: #60a5fa;"></iconify-icon>
+                            <span>1. Local Storage & Zero Telemetry</span>
+                        </div>
+                        <div class="settings-item-desc" style="line-height: 1.5;">
+                            All notes are stored on your local disk in standard, readable <code>.nsh</code> format. Nosh contains no telemetry, user tracking, or advertising code.
+                        </div>
+                    </div>
+
+                    <div class="settings-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <div class="settings-item-label" style="display: flex; align-items: center; gap: 6px;">
+                            <iconify-icon icon="logos:youtube-icon" width="14"></iconify-icon>
+                            <span>2. YouTube Player</span>
+                        </div>
+                        <div class="settings-item-desc" style="line-height: 1.5;">
+                            The YouTube companion player operates strictly via official YouTube embedded frames. Nosh does not collect, log, or track user browsing habits or credentials.
+                        </div>
+                    </div>
+
+                    <div class="settings-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <div class="settings-item-label" style="display: flex; align-items: center; gap: 6px;">
+                            <iconify-icon icon="logos:google-drive" width="14"></iconify-icon>
+                            <span>3. Google Drive Sync</span>
+                        </div>
+                        <div class="settings-item-desc" style="line-height: 1.5;">
+                            Google Drive sync operates via official Google OAuth and accesses only the authorized <code>noshTheNotepad</code> folder. Personal emails and unrelated files are never accessed.
+                        </div>
+                    </div>
+
+                    <div class="settings-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <div class="settings-item-label" style="display: flex; align-items: center; gap: 6px;">
+                            <iconify-icon icon="solar:cloud-upload-linear" style="color: #10b981;"></iconify-icon>
+                            <span>4. Web Publishing (Supabase)</span>
+                        </div>
+                        <div class="settings-item-desc" style="line-height: 1.5;">
+                            Notes are published to the web only when you explicitly click the "Publish" button. Only the selected note's content is transmitted over HTTPS to generate a shareable link.
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button class="btn-secondary btn-sm" onclick="openExternalUrl('https://github.com/CGhost1908/nosh')">
+                            <iconify-icon icon="solar:code-file-linear"></iconify-icon> View Open Source Code
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeAllModals()">Cancel</button>
+            <button class="btn-primary" onclick="saveSettings(); closeAllModals();">Save Changes</button>
+        </div>
+    </div>
+
+    <!-- 8. Unsaved Changes Warning Modal -->
+    <div class="modal-container" id="unsaved-modal" style="width: 420px;">
+        <div class="modal-header">
+            <h3>Unsaved Changes</h3>
+            <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 13px; color: var(--text-secondary);">
+                You have unsaved changes in <strong id="unsaved-doc-name" style="color:#fff;">this note</strong>. Would you like to save before continuing?
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="unsaved-cancel-btn">Cancel</button>
+            <button class="btn-danger" id="unsaved-discard-btn">Discard</button>
+            <button class="btn-primary" id="unsaved-save-btn">Save Note</button>
+        </div>
+    </div>
+
+    <!-- 9. Knowledge Graph View Modal -->
+    <div class="modal-container graph-modal-container" id="graph-modal">
+        <div class="graph-header">
+            <div class="graph-title-group">
+                <h3 style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 0; color: #fff;">
+                    <iconify-icon icon="solar:pie-chart-2-linear" style="color: var(--accent); font-size: 18px;"></iconify-icon>
+                    Knowledge Graph View
+                </h3>
+                <span class="graph-stats-badge" id="graph-stats-badge">0 notes · 0 links</span>
+            </div>
+            <div class="graph-controls">
+                <div class="graph-search-wrap">
+                    <iconify-icon icon="solar:magnifer-linear" class="graph-search-icon"></iconify-icon>
+                    <input type="text" id="graph-search-input" placeholder="Filter graph nodes..." oninput="filterKnowledgeGraph(this.value)" autocomplete="off" spellcheck="false">
+                </div>
+                <button class="titlebar-btn" onclick="resetGraphView()" title="Reset Graph View & Pan">
+                    <iconify-icon icon="solar:restart-linear"></iconify-icon>
+                </button>
+                <button class="modal-close-btn" onclick="closeKnowledgeGraph()" title="Close Graph (Escape)">
+                    <iconify-icon icon="solar:close-circle-linear"></iconify-icon>
+                </button>
+            </div>
+        </div>
+        <div class="graph-canvas-wrap">
+            <canvas id="graph-canvas"></canvas>
+            <div class="graph-skeleton-overlay hidden" id="graph-skeleton-overlay">
+                <div class="graph-radar-spinner">
+                    <div class="graph-radar-scanner"></div>
+                    <iconify-icon icon="solar:pie-chart-2-linear" style="font-size: 26px; color: var(--accent); opacity: 0.8;"></iconify-icon>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <span style="font-size: 13.5px; font-weight: 600; color: #fff;">Mapping Knowledge Graph</span>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">Analyzing backlinks and cross-references...</span>
+                </div>
+            </div>
+            <div class="graph-floating-hint">
+                Drag to pan · Scroll to zoom · Click node to open · Drag node to interact
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Zen Mode Exit Pill -->
+    <div class="zen-exit-pill" id="zen-exit-pill" onclick="toggleZenMode(false)" title="Exit Zen Focus Mode (Esc)">
+        <iconify-icon icon="solar:minimize-square-linear"></iconify-icon>
+        <span>Exit Focus (Esc)</span>
+    </div>
+
+    <!-- Context Menu for Notes -->
+    <div id="context-menu" class="custom-context-menu">
         <ul>
-          <li id="option1">Delete</li>
-          <li id="option2">Rename</li>
-          <li id="option3">Open File Path</li>
+            <li id="ctx-pin"><iconify-icon icon="solar:pin-linear"></iconify-icon> <span id="ctx-pin-text">Pin Note</span></li>
+            <li id="ctx-move-folder"><iconify-icon icon="solar:folder-with-files-linear"></iconify-icon> Move to Folder...</li>
+            <li id="ctx-remove-folder" style="display:none;"><iconify-icon icon="solar:folder-linear"></iconify-icon> Remove from Folder</li>
+            <li id="ctx-rename"><iconify-icon icon="solar:pen-linear"></iconify-icon> Rename</li>
+            <li id="ctx-open-dir"><iconify-icon icon="solar:folder-with-files-linear"></iconify-icon> Open in Explorer</li>
+            <li id="ctx-duplicate"><iconify-icon icon="solar:copy-linear"></iconify-icon> Duplicate</li>
+            <li id="ctx-delete" class="danger"><iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon> Delete</li>
         </ul>
     </div>
-    <div class="copied-notification">Copied.</div>
-    <div class="container">
 
-        <div class="settings">
-            <div class="settings-categories">
-                <button onclick="openSettingCategory('general')" class="settings-general settings-active-button">General</button>
-                <button onclick="openSettingCategory('apps')" class="settings-apps">Apps</button>
-                <button onclick="openSettingCategory('code-block')" class="settings-code-block">Code Blocks</button>
-                <button onclick="openSettingCategory('published-files')" class="settings-published-files">Published Files</button>
-            </div>
-            <div class="settings-props">
-                <div class="settings-panel general-settings">
-                    <h1 style="width: 100%; text-align: start; color: #fff; margin: 10px 0 10px 30px;">General Settings</h1>
-                    <label class="default-font-size settings-property" for="">
-                        <p>
-                            Default Font Size: 
-                        </p>
-                        <div style="display: flex; flex-direction: row; margin-right: 12.5px;">
-                            <input type="number" id="default-font-size-input" maxlength="2">
-                            <p style="margin-left: -30px;">px</p>
-                        </div>
-                    </label>
-                    <label for="" class="auto-save settings-property">
-                        <p>Auto Save</p>
-                        <label class="switch">
-                            <input type="checkbox" class="settings-checkbox" id="auto-save-checkbox">
-                            <div class="slider round"></div>
-                        </label>
-                    </label>
-                    <label for="" class="save-path settings-property">
-                        <p>Save Path</p>
-                        <nav style="display: flex; flex-direction: row; align-items: center;">
-                            <input type="text" class="settings-input" id="save-path-input" onclick="openChooseFolder()" readonly>
-                            <button class="set-default-path" onclick="setDefaultSavePath()"><iconify-icon icon="material-symbols-light:disabled-by-default"></iconify-icon></button>
-                        </nav>
-                    </label>
-                    <nav class="settings-button-nav">
-                        <button onclick="closeSettings()" class="close-settings">Close</button>
-                        <button onclick="setSettings()" class="apply">Apply</button>
-                    </nav>
-                </div>
-                <div class="settings-panel apps-settings">
-                    <h1 style="width: 100%; text-align: start; color: #fff; margin: 10px 0 10px 30px;">App Settings</h1>
-                    <div class="drive-saves">
-                        <h3>0 files found.</h3>
-                        <nav class="select-files"></nav>
-                        <button onclick="exitDriveFilesPopup()">Exit</button>
-                    </div>
-                    <label class="spotify-label settings-property" for="">
-                        <button class="spotify-button" onclick="connectSpotify(false)"><iconify-icon icon="mdi:spotify"></iconify-icon> Connect Spotify</button>
-                        <h1 class="spotify-connected"><div style="display: flex; align-items: center;"><iconify-icon icon="mdi:tick-circle"></iconify-icon>Spotify account linked.</div><button class="spotify-unlink" onclick="unlinkSpotify()">Unlink</button></h1>
-                    </label>
-                    <label for="" class="spotify-player-setting settings-property">
-                        <span>View Spotify Player</span>
-                        <label class="switch">
-                            <input type="checkbox" class="settings-checkbox" id="spotify-checkbox">
-                            <div class="slider round"></div>
-                        </label>
-                    </label>
-                    <label class="google-drive-label settings-property" for="">
-                        <button class="link-drive-button" onclick="linkDrive()"><iconify-icon icon="logos:google-drive"></iconify-icon> Link Google Drive</button>
-                        <h1 class="drive-connected"><div style="display: flex; align-items: center;"><iconify-icon icon="mdi:tick-circle"></iconify-icon>Google Drive account linked.</div><button class="drive-unlink" onclick="unlinkDrive()">Unlink</button></h1>
-                    </label>
-                    <label class="settings-property import-drive-label" for="">
-                        <span>Import missing files from Google Drive.</span>
-                        <button onclick="checkNonExistFilesDrive()" class="import-drive-button">Import</button>
-                        <div class="importing-popup">
-                            <nav class="success-nav-drive">
-                                <span>Imported</span>
-                                <span style="color: green;" class="imported-file-number">0</span>
-                                <span style="margin-right: 20px;">file</span>
-                            </nav>
-                            <nav class="error-nav-drive">
-                                <span>Error occured in </span>
-                                <span style="color: red;" class="not-imported-file-number">0</span>
-                                <span>file</span>
-                            </nav>
-                        </div>
-                    </label>
-                    <nav class="settings-button-nav">
-                        <button onclick="closeSettings()" class="close-settings">Close</button>
-                        <button onclick="setSettings()" class="apply">Apply</button>
-                    </nav>
-                </div>
-                <div class="settings-panel published-files-settings">
-                    <h1>Published Files <iconify-icon icon="tabler:refresh" onclick="showPublishedFiles()"></iconify-icon></h1>
-                    <div class="published-files-container"></div>
-                    <div class="published-files-busy"><iconify-icon icon="line-md:loading-loop"></iconify-icon></div>
-                    <nav class="settings-button-nav">
-                        <button onclick="closeSettings()" class="close-settings">Close</button>
-                        <button onclick="setSettings()" class="apply">Apply</button>
-                    </nav>
-                </div>
-                <div class="settings-panel code-block-settings">
-                    <h1>Code Block Settings</h1>
-                    <div class="code-block-theme settings-property"><p>Theme</p></div>
-                    <div class="code-block-themes settings-property"></div>
-                    <nav class="settings-button-nav">
-                        <button onclick="closeSettings()" class="close-settings">Close</button>
-                        <button onclick="setSettings()" class="apply">Apply</button>
-                    </nav>
-                    <div style="min-height: 225px;"></div>
-                    <div id="example-code-block">
-                        <button style="display: none;" onclick="closeExampleCodeBlock()"><iconify-icon icon="lets-icons:close-ring"></iconify-icon></button>
-                        <iconify-icon class="open-example-code-block" icon="mingcute:up-fill"></iconify-icon>
-                    </div>
-                </div>
+    <!-- Context Menu for Folders -->
+    <div id="folder-context-menu" class="custom-context-menu" style="display: none;">
+        <ul>
+            <li id="folder-ctx-new-note"><iconify-icon icon="solar:document-add-linear"></iconify-icon> New Note in Folder</li>
+            <li id="folder-ctx-rename"><iconify-icon icon="solar:pen-linear"></iconify-icon> Rename Folder</li>
+            <li id="folder-ctx-delete" class="danger"><iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon> Delete Folder</li>
+        </ul>
+    </div>
+
+    <!-- Context Menu for Sidebar Background -->
+    <div id="sidebar-context-menu" class="custom-context-menu" style="display: none;">
+        <ul>
+            <li onclick="openCreateFolderModal()"><iconify-icon icon="solar:folder-add-linear"></iconify-icon> New Folder</li>
+            <li onclick="createNewFile()"><iconify-icon icon="solar:document-add-linear"></iconify-icon> New Note</li>
+            <li onclick="readDatabase()"><iconify-icon icon="solar:restart-linear"></iconify-icon> Refresh Notes</li>
+        </ul>
+    </div>
+
+    <!-- Custom Color Picker Popover -->
+    <div class="custom-color-popover" id="custom-color-popover" style="display: none;">
+        <div class="color-popover-header">
+            <span class="color-popover-title" id="color-popover-title">Text Color</span>
+            <button class="color-clear-btn" onclick="applyCustomColor('transparent')" title="Reset to default">
+                <iconify-icon icon="solar:restart-linear"></iconify-icon> Clear
+            </button>
+        </div>
+        <div class="color-swatches-section">
+            <div class="color-swatches-label">Curated Palette</div>
+            <div class="color-swatches-grid" id="color-swatches-grid">
+                <!-- Dynamically populated in visual.js -->
             </div>
         </div>
-        <div class="popup-section">
-            <div class="files-popup popup">
-                <div class="files-popup-loading">
-                    <iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon>
-                </div>
-                <div class="files-popup-success" onclick="closeOverlay()">
-                    <iconify-icon icon="mdi:file-tick"></iconify-icon>
-                    <h3>File saved.</h3>
-                    <p>Updating the website content may take a few minutes.</p>
-                </div>
-                <h1>Choose a file.</h1>
-                <div>
-                    <h3 class="selected">
-                        <span>Choose a file</span>
-                        <span class="select-arrow">▼</span>
-                    </h3>
-                    <ul></ul>
-                </div>
-                <button class="update-file-website">Update</button>
-            </div>
-            <div class="language-popup popup">
-                <input class="search-language" type="text" placeholder="Search language" oninput="searchLanguage()">
-                <div class="languages">
-                    <button value="text/x-csrc" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>C</button>
-                    <button value="text/x-ceylon" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>C#</button>
-                    <button value="text/x-c++src" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>C++</button>
-                    <button value="css" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>CSS</button>
-                    <button value="htmlmixed" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>HTML</button>
-                    <button value="text/x-java" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>Java</button>
-                    <button value="javascript" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>Javascript</button>
-                    <button value="python" onclick="createCodeBlock(this.value)" class="language"><iconify-icon icon="material-symbols:star"></iconify-icon>Python</button>
-                    <button value="bash" onclick="createCodeBlock(this.value)" class="language">Bash</button>
-                    <button value="go" onclick="createCodeBlock(this.value)" class="language">Go</button>
-                    <button value="json" onclick="createCodeBlock(this.value)" class="language">JSON</button>
-                    <button value="clike" onclick="createCodeBlock(this.value)" class="language">Kotlin</button>
-                    <button value="scss" onclick="createCodeBlock(this.value)" class="language">SCSS</button>
-                    <button value="powershell" onclick="createCodeBlock(this.value)" class="language">Shell</button>
-                    <button value="swift" onclick="createCodeBlock(this.value)" class="language">Swift</button>
-                    <button value="php" onclick="createCodeBlock(this.value)" class="language">PHP</button>
-                    <button value="javascript" onclick="createCodeBlock(this.value)" class="language">TypeScript</button>
-                    <button value="dockerfile" onclick="createCodeBlock(this.value)" class="language">Docker</button>
-                    <button value="rust" onclick="createCodeBlock(this.value)" class="language">Rust</button>
-                    <button value="perl" onclick="createCodeBlock(this.value)" class="language">Perl</button>
-                    <button value="xml" onclick="createCodeBlock(this.value)" class="language">xml</button>
-                    <button value="yaml" onclick="createCodeBlock(this.value)" class="language">yaml</button>
-                    <button value="sql" onclick="createCodeBlock(this.value)" class="language">SQL</button>
-                </div>
-            </div>
-            <div class="overlay" onclick="closeOverlay()"></div>
-            <div class="add-link-popup popup">
-                <span>Enter Link</span>
-                <input class="link-input" type="">
-                <button class="add-link-button" onclick="addLink()">Add</button>
-            </div>
-            <div class="remove-popup popup">
-                <span>Are you sure?</span>
-                <!-- <nav>
-                    <button class="cancel-button-popup">Cancel</button>
-                    <button class="remove-button-popup">Remove</button>
-                </nav> -->
-                <label id="remove-quest">
-                    <input value="50" class="remove-range no-range-event" type="range">
-                    <span style="margin: 22.5px 210px 0px 0px; background-color: #5c5c5c; transform: rotate(270deg);"><iconify-icon style="margin-bottom: 5px;" icon="ep:arrow-up"></iconify-icon></span>
-                    <span style="margin: 22.5px 0px 0px 210px; background-color: rgb(200, 17, 17);"><iconify-icon icon="ic:round-close"></iconify-icon></span>
+        <div class="color-custom-section">
+            <div class="color-custom-row">
+                <input type="text" class="color-hex-input" id="color-hex-input" placeholder="#6366f1" maxlength="7" spellcheck="false">
+                <label class="color-custom-wheel" title="Custom color spectrum">
+                    <input type="color" id="color-native-fallback" oninput="onCustomHexInput(this.value)">
+                    <span class="color-wheel-preview" id="color-wheel-preview"></span>
                 </label>
-            </div>
-            <div class="save-warning-popup popup">
-                <p>Save changes?</p>
-                <nav>
-                    <button class="cancel-save-button">Cancel</button>
-                    <button class="save-save-button">Save</button>
-                    <button class="discard-save-button">Discard</button>
-                </nav>
-            </div>
-            <div class="drive-popup popup">
-                <iconify-icon icon="iconoir:google-drive-warning"></iconify-icon>
-                <div>
-                    <span>This action will delete file <br>from Google Drive.</span>
-                    <nav>
-                        <button onclick="closeOverlay()" class="cancel-button-drive-popup">Cancel</button>
-                        <button onclick="cancelDrive()" style="background-color: #2a0562;" class="continue-button-drive-popup">Continue</button>
-                    </nav>
-                </div>
-            </div>
-            <div class="github-uploaded-popup popup">
-                <div>
-                    <input type="text" class="share-link-input" readonly>
-                    <p>It may take a minute for the site to open.</p>
-                </div>
-            </div>
-            <div class="share-confirm-popup popup">
-                <h3>Everyone will be able to see your file after you publish it.</h3>
-                <h3>Are you sure?</h3>
-                <nav>
-                    <button onclick="closeOverlay()">Cancel</button>
-                    <button class="confirm-publish" onclick="publishFile()">Publish</button>
-                </nav>
-            </div>
-        </div>
-        <div class="left-side">
-            <nav class="organizer1">
-                <div class="minimize-button">
-                    <input class="menu-checkbox" type="checkbox"/>
-                    <span id="span1"></span>
-                    <span id="span2"></span>
-                    <span id="span3"></span>
-                </div>
-                <h1 class="title">nosh</h1>
-                <input type="file" name="" id="open-file">
-            </nav>
-            <nav class="organizer2">
-                <nav class="organizer3">
-                    <label for="search-checkbox" class="trio trio-hover search">
-                        <iconify-icon icon="ic:round-search"></iconify-icon>
-                        <input class="search-checkbox" id="search-checkbox" type="checkbox">
-                    </label>
-                    <input class="search-input" type="text">
-                    <button class="trio trio-hover settings-button"><iconify-icon icon="solar:settings-bold"></iconify-icon></button>
-                </nav>
-                <button onclick="readDatabase(document.querySelector('.active')?.getAttribute('file-name') || undefined)" class="trio trio-hover refresh"><iconify-icon icon="ic:round-refresh"></iconify-icon></button>
-            </nav>
-            <div class="saves"></div>
-            <div class="spotify">
-                <div class="track-info">
-                    <button class="minimize-spotify" onclick="minimizeSpotify()"><iconify-icon icon="icon-park-outline:down"></iconify-icon></button>
-                    <img src="https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_White.png" class="album-photo">
-                    <div class="spotify-col">
-                        <h3 class="track-name">No track playing</h3>
-                        <p class="artist-name">--</p>
-                    </div>
-                </div>
-                <div class="controls">
-                    <button id="prev"><iconify-icon icon="mi:previous"></iconify-icon></button>
-                    <button id="toggle-play"><iconify-icon icon="mi:play"></iconify-icon></button>
-                    <button id="next"><iconify-icon icon="mi:next"></iconify-icon></button>
-                </div>
-                <div class="spotify-volume">
-                    <div id="slider" class="rslider"></div>
-                </div>
-            </div>
-        </div>
-        <div class="right-side">
-            <div class="top-nav">
-                <h3 class="text-title"></h3>
-                <div class="drag-area"></div>
-                <button onclick="minimizeWindow()" class="minimize"><iconify-icon icon="mingcute:minimize-fill"></iconify-icon></button>
-                <button onclick="closeWindow()" class="close"><iconify-icon icon="ic:round-close"></iconify-icon></button>
-            </div>
-            <div id="inner" class="inner dark-inner">
-                <!-- <div class="bottom">
-                    <object class="motorcycle" type="image/svg+xml" data="src/emojione_motorcycle.svg"></object>
-                </div> -->
-                <div class="toolbar">
-                    <div class="toolbar-dropdown">
-                        <div class="dropdown-header">File</div>
-                        <ul class="dropdown-list" onclick="closeDropdown(this);">
-                            <li class="dropdown-item" onclick="fileHandle('new')">New file</li>
-                            <li class="dropdown-item" onclick="fileHandle('open')">Open file</li>
-                            <li class="dropdown-item" onclick="fileHandle('save')">Save</li>
-                            <li class="dropdown-item" onclick="fileHandle('save-as')">Save as</li>
-                            <li class="dropdown-item" onclick="fileHandle('pdf')">Save as pdf</li>
-                        </ul>
-                    </div>
-                    <!-- <p class="separator">|</p> -->
-                    <div class="toolbar-dropdown">
-                        <div class="dropdown-header">Format</div>
-                        <ul class="dropdown-list" onclick="closeDropdown(this)">
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'h1')">Heading1</li>
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'h2')">Heading2</li>
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'h3')">Heading3</li>
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'h4')">Heading4</li>
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'h5')">Heading5</li>
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'h6')">Heading6</li>
-                            <li class="dropdown-item" onclick="formatDoc('formatBlock', 'p')">Paragraph</li>
-                        </ul>
-                    </div>
-                    <div class="toolbar-dropdown">
-                        <div class="dropdown-header">Font Size</div>
-                        <ul class="dropdown-list" onclick="closeDropdown(this)">
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '1')">Extra small</li>
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '2')">Small</li>
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '3')">Regular</li>
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '4')">Medium</li>
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '5')">Large</li>
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '6')">Extra large</li>
-                            <li class="dropdown-item" onclick="formatDoc('fontSize', '7')">Big</li>
-                        </ul>
-                    </div>
-                    <div class="toolbar-color" onclick="document.getElementById('text-color').click();">
-                        <div>Color</div>
-                        <input value="#ffffff" oninput="formatDoc('foreColor', this.value); this.selectedIndex=0" id="text-color" type="color">
-                    </div>
-                    <div class="toolbar-color" onclick="document.getElementById('background-color').click();">
-                        <div>Background</div>
-                        <input value="#ffffff" oninput="formatDoc('hiliteColor', this.value); this.selectedIndex=0" id="background-color" type="color">
-                    </div>
-                    <button onclick="addImage()" class="quad add-image-button"><iconify-icon class="quad add-image-icon" icon="ic:outline-image"></iconify-icon></button>
-                    <button onclick="addVideo()" class="quad add-video-button"><iconify-icon class="quad add-video-icon" icon="ri:video-add-line"></iconify-icon></button>
-                    <button onclick="selectLanguage()" class="quad code-block-button">
-                        <iconify-icon id="code-block-icon" icon="ant-design:code-outlined"></iconify-icon>
-                    </button>
-                    <p class="separator">|</p>
-                    <label class="drive-toolbar disabled">
-                        <input type="checkbox" class="save-drive-checkbox" disabled hidden>
-                        <iconify-icon id="drive-enable-icon" icon="iconoir:google-drive-check"></iconify-icon>
-                        <iconify-icon class="visible" id="drive-disable-icon" icon="iconoir:google-drive-sync"></iconify-icon>
-                    </label>
-                    <button class="quad share disabled" id="share-file"><iconify-icon icon="mdi:web-plus"></iconify-icon></button>
-                    <button onclick="removePopup()" class="quad trash disabled"><iconify-icon icon="fa-regular:trash-alt"></iconify-icon></button>
-                    <div class="btn-toolbar">
-                        <button onclick="formatDoc('undo')" class="toolbar-btn"><i class='bx bx-sm bx-undo' ></i></button>
-                        <button onclick="formatDoc('redo')" class="toolbar-btn"><i class='bx bx-sm bx-redo' ></i></button>
-                        <button onclick="formatDoc('bold')" class="toolbar-btn"><i class='bx bx-sm bx-bold' ></i></button>
-                        <button onclick="formatDoc('underline')" class="toolbar-btn"><i class='bx bx-sm bx-underline' ></i></button>
-                        <button onclick="formatDoc('italic')" class="toolbar-btn"><i class='bx bx-sm bx-italic' ></i></button>
-                        <button onclick="formatDoc('strikethrough')" class="toolbar-btn"><i class='bx bx-sm bx-strikethrough' ></i></button>
-                        <button onclick="formatDoc('justifyCenter')" class="toolbar-btn"><i class='bx bx-sm bx-align-middle' ></i></button>
-                        <button onclick="formatDoc('justifyLeft')" class="toolbar-btn"><i class='bx bx-sm bx-align-left' ></i></button>
-                        <button onclick="formatDoc('justifyRight')" class="toolbar-btn"><i class='bx bx-sm bx-align-right' ></i></button>
-                        <button onclick="formatDoc('justifyFull')" class="toolbar-btn"><i class='bx bx-sm bx-align-justify' ></i></button>
-                        <button onclick="formatDoc('insertOrderedList')" class="toolbar-btn"><i class='bx bx-sm bx-list-ol' ></i></button>
-                        <button onclick="formatDoc('insertUnorderedList')" class="toolbar-btn"><i class='bx bx-sm bx-list-ul' ></i></button>
-                        <button onclick="openLinkPopup()" class="link-button toolbar-btn"><i class='bx bx-sm bx-link' ></i></button>
-                        <button onclick="formatDoc('unlink')" class="toolbar-btn"><i class='bx bx-sm bx-unlink' ></i></button>
-                        <button onclick="" data-active="false" id="show-code" class="toolbar-btn"><i class='bx bx-sm bx-code-alt' ></i></button>
-                        <button onclick="changeTheme()" class="toolbar-btn change-theme"><i id="change-theme-icon" class='bx bx-sm bxs-moon'></i></button>
-                    </div>
-                </div>
-                <div id="content" class="dark-content" contenteditable="true" spellcheck="false">
-                    
-                </div>
-                <div id="saved-notification" class="notification">
-                    <iconify-icon icon="simple-icons:ticktick"></iconify-icon>
-                    <p>File saved.</p>
-                </div>
-                <div id="invalid-name-notification" class="notification">
-                    <iconify-icon icon="icon-park-solid:caution"></iconify-icon>
-                    <p>Invalid name!</p>
-                </div>
-                <div class="drive-notification">
-                    <iconify-icon icon="material-symbols:info-outline-rounded"></iconify-icon>
-                    <span>You must save file for synchronization with Google Drive.</span>
-                </div>
+                <button class="btn-primary" style="padding: 3px 8px; font-size: 11px;" onclick="applyCustomHexFromInput()">Apply</button>
             </div>
         </div>
     </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Hidden file input for opening files -->
+    <input type="file" id="open-file" accept=".nsh,.txt,.html,.md" style="display: none;">
+
+    <!-- Scripts Order -->
+    <script src="requirements.js"></script>
+    <script src="visual.js"></script>
+    <script src="drive.js"></script>
+    <script src="folders.js"></script>
+    <script src="save.js"></script>
+    <script src="graph.js"></script>
+    <script src="code_block.js"></script>
+    <script src="imageVideo.js"></script>
+    <script src="search.js"></script>
+    <script src="settings.js"></script>
+    <script src="youtube.js"></script>
+    <script src="share.js"></script>
+    <script src="rightClick.js"></script>
+    <script src="palette.js"></script>
+    <script src="script.js"></script>
+    <script src="editorContext.js"></script>
 </body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
-
-<!-- prism.js -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.js"></script>
-
-<!-- ace editor -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
-
-<!-- interact.js -->
-<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
-
-<!-- Spotify -->
-<script src="https://sdk.scdn.co/spotify-player.js"></script>
-
-
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-                                    
-<script src="https://cdnjs.cloudflare.com/ajax/libs/roundSlider/1.3.2/roundslider.min.js"></script>
-
-
-<script src="requirements.js"></script>
-<script src="script.js"></script>
-<script src="visual.js"></script>
-<script src="drive.js"></script>
-<script src="save.js"></script>
-<script src="rightClick.js"></script>
-<script src="settings.js"></script>
-<script src="code_block.js"></script>
-<script src="imageVideo.js"></script>
-<script src="search.js"></script>
-<script src="spotify.js"></script>
-<script src="share.js"></script>
 </html>
-
-
-
-

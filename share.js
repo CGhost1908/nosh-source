@@ -1,694 +1,730 @@
+// Web Publishing & Sharing (Supabase Cloud + GitHub Pages Web Viewer)
 
-function generateRandomID(){
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < 25; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
+const SUPABASE_CONFIG = {
+    url: 'https://buvtdaxlibejpjlkxaor.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnRkYXhsaWJlanBqbGt4YW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1MjA2NTIsImV4cCI6MjEwOTA5NjY1Mn0.Kd2bR8gAm2lLGKHLhV1CJCacuLE1NKPptVmIJiKZnNY',
+    viewerBaseUrl: 'https://cghost1908.github.io/nosh/view.html'
+};
+
+function generateRandomID() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let res = '';
+    for (let i = 0; i < 12; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return result;
+    return res;
 }
 
+// Persistent cache mapping local asset paths (e.g., "assets/asset_123.png") to Catbox URLs
+function getCatboxAssetCache() {
+    try {
+        return JSON.parse(localStorage.getItem('nosh-catbox-asset-cache')) || {};
+    } catch {
+        return {};
+    }
+}
 
-document.getElementById('share-file').addEventListener('click', async() => {
-    overlay.style.opacity = ".3";
-    overlay.style.pointerEvents = "all";
-    popupSection.style.opacity = "1";
-    popupSection.style.pointerEvents = "all";
-    document.querySelector('.share-confirm-popup').style.opacity = "1";
-    document.querySelector('.share-confirm-popup').style.pointerEvents = "all";
-});
+function saveCatboxAssetCache(cache) {
+    try {
+        localStorage.setItem('nosh-catbox-asset-cache', JSON.stringify(cache));
+    } catch (e) {
+        console.warn('Failed to save Catbox asset cache:', e);
+    }
+}
 
+// Upload any local or data-URL media in note HTML to Catbox and replace src with public URLs for publishing
+async function resolvePublishedMediaInHTML(rawHtml, onProgressStatus) {
+    if (!rawHtml || typeof document === 'undefined') return rawHtml;
 
-function publishFile(){
-    document.querySelector('.confirm-publish').innerHTML = 'Publishing<iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon>';
-    document.querySelectorAll('.share-confirm-popup button').forEach((button) => button.disabled = true);
-    overlay.style.pointerEvents = "none";
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = rawHtml;
+
+    // Strip any editor-only chrome just in case rawHtml came straight from disk
+    tempDiv.querySelectorAll('.CodeMirror, .media-toolbar, .media-resize-handle').forEach(el => el.remove());
+
+    const mediaEls = Array.from(tempDiv.querySelectorAll('img, video'));
+    if (mediaEls.length === 0) return tempDiv.innerHTML;
+
+    const assetCache = getCatboxAssetCache();
+    let cacheUpdated = false;
+
+    if (typeof savesDir === 'undefined' || !savesDir) {
+        if (typeof invokeSavesDir === 'function') {
+            await invokeSavesDir();
+        }
+    }
+
+    for (let i = 0; i < mediaEls.length; i++) {
+        const el = mediaEls[i];
+        const rawSrc = (el.getAttribute('src') || '').trim();
+        const rel = el.getAttribute('data-asset-rel') || (rawSrc.startsWith('assets/') ? rawSrc : null);
+
+        // 1. Already in localStorage asset cache
+        if (rel && assetCache[rel] && /^https?:\/\//i.test(assetCache[rel])) {
+            el.setAttribute('src', assetCache[rel]);
+            continue;
+        }
+
+        // 2. Already an external http/https URL
+        if (/^https?:\/\//i.test(rawSrc)) {
+            continue;
+        }
+
+        // 3. Local asset ("assets/...", "file://...", or "data:...") -> Upload to Catbox on publish
+        if (typeof ipcRenderer === 'undefined') continue;
+
+        let uploadPayload = null;
+        if (rel && typeof savesDir !== 'undefined' && savesDir && typeof path !== 'undefined') {
+            const fullPath = path.join(savesDir, rel);
+            uploadPayload = {
+                filePath: fullPath,
+                fileName: path.basename(fullPath)
+            };
+        } else if (rawSrc.startsWith('file://')) {
+            let localPath = decodeURIComponent(rawSrc.replace(/^file:\/\/\/?/i, ''));
+            if (typeof process !== 'undefined' && process.platform !== 'win32' && !localPath.startsWith('/')) {
+                localPath = '/' + localPath;
+            }
+            uploadPayload = {
+                filePath: localPath,
+                fileName: typeof path !== 'undefined' ? path.basename(localPath) : 'media.png'
+            };
+        } else if (rawSrc.startsWith('data:')) {
+            const match = rawSrc.match(/^data:([^;]+);base64,(.+)$/i);
+            if (match) {
+                const mimeType = match[1];
+                const base64Data = match[2];
+                const extMap = {
+                    'image/png': '.png',
+                    'image/jpeg': '.jpg',
+                    'image/gif': '.gif',
+                    'image/webp': '.webp',
+                    'image/svg+xml': '.svg',
+                    'video/mp4': '.mp4',
+                    'video/webm': '.webm'
+                };
+                const ext = extMap[mimeType.toLowerCase()] || '.png';
+                uploadPayload = {
+                    base64Data,
+                    mimeType,
+                    fileName: `embedded_${Date.now()}${ext}`
+                };
+            }
+        }
+
+        if (uploadPayload) {
+            if (typeof onProgressStatus === 'function') {
+                onProgressStatus(`Uploading media (${i + 1}/${mediaEls.length})...`);
+            }
+            const res = await ipcRenderer.invoke('upload-to-catbox', uploadPayload);
+            if (res && res.success && res.url) {
+                el.setAttribute('src', res.url);
+                if (rel) {
+                    assetCache[rel] = res.url;
+                    cacheUpdated = true;
+                }
+            } else {
+                console.warn('Failed to upload media asset to Catbox:', res && res.error);
+            }
+        }
+    }
+
+    if (cacheUpdated) {
+        saveCatboxAssetCache(assetCache);
+    }
+
+    return tempDiv.innerHTML;
+}
+
+// Published Notes Storage Helpers
+function getPublishedInfoForNote(noteName) {
+    if (!noteName) return null;
+    const safeTarget = typeof path !== 'undefined' ? path.basename(noteName, '.nsh').toLowerCase() : noteName.toLowerCase();
+    const list = JSON.parse(localStorage.getItem('publishedFiles')) || [];
+    return list.find(f => {
+        if (!f || !f.name) return false;
+        const entryName = typeof path !== 'undefined' ? path.basename(f.name, '.nsh').toLowerCase() : f.name.toLowerCase();
+        return entryName === safeTarget;
+    }) || null;
+}
+
+function isNotePublished(noteName) {
+    return Boolean(getPublishedInfoForNote(noteName));
+}
+
+function savePublishedRecord(record) {
+    if (!record || !record.name) return;
+    let list = JSON.parse(localStorage.getItem('publishedFiles')) || [];
+    const safeTarget = typeof path !== 'undefined' ? path.basename(record.name, '.nsh').toLowerCase() : record.name.toLowerCase();
+
+    // Remove existing duplicates for this note
+    list = list.filter(f => {
+        if (!f || !f.name) return false;
+        const entryName = typeof path !== 'undefined' ? path.basename(f.name, '.nsh').toLowerCase() : f.name.toLowerCase();
+        return entryName !== safeTarget;
+    });
+
+    list.unshift(record);
+    localStorage.setItem('publishedFiles', JSON.stringify(list));
+}
+
+// Update Toolbar Publish Button UI State
+function updatePublishButtonState() {
+    const shareBtn = document.getElementById('share-file');
+    if (!shareBtn) return;
+
+    if (typeof activeNoteName === 'undefined' || !activeNoteName) {
+        shareBtn.style.display = 'none';
+        return;
+    }
+
+    shareBtn.style.display = 'inline-flex';
+    const publishedInfo = getPublishedInfoForNote(activeNoteName);
+
+    // Clean up any stray duplicate spans created previously
+    const strayDots = shareBtn.querySelectorAll('.publish-live-dot');
+    strayDots.forEach(d => {
+        if (d.id !== 'share-file-dot') d.remove();
+    });
+
+    const label = document.getElementById('share-file-label') || shareBtn.querySelector('span:not(.live-dot)');
+    const dot = document.getElementById('share-file-dot');
+    const icon = document.getElementById('share-file-icon') || shareBtn.querySelector('iconify-icon');
+
+    if (publishedInfo) {
+        shareBtn.classList.add('published');
+        const updateInfo = publishedInfo.updatedAt ? ` (Updated: ${publishedInfo.updatedAt})` : '';
+        shareBtn.setAttribute('title', `Note is live online (${publishedInfo.date || 'Live'})${updateInfo}.\nClick to manage, copy link, or update live note.`);
+        if (label) label.textContent = 'Published';
+        if (icon) icon.setAttribute('icon', 'solar:cloud-check-bold');
+        if (dot) dot.style.display = 'inline-block';
+    } else {
+        shareBtn.classList.remove('published');
+        shareBtn.setAttribute('title', 'Publish Note to Web (Cloud)');
+        if (label) label.textContent = 'Publish';
+        if (icon) icon.setAttribute('icon', 'solar:upload-track-2-bold');
+        if (dot) dot.style.display = 'none';
+    }
+}
+
+// Open Publish / Live Status Modal
+const shareFileBtn = document.getElementById('share-file');
+if (shareFileBtn) {
+    shareFileBtn.addEventListener('click', () => {
+        if (typeof activeNoteName === 'undefined' || !activeNoteName) {
+            showToast('Open a note first to publish', 'warning');
+            return;
+        }
+
+        const publishedInfo = getPublishedInfoForNote(activeNoteName);
+
+        if (publishedInfo) {
+            // File is ALREADY published: open management & update popup
+            openPublishedStatusModal(publishedInfo);
+        } else {
+            // File is NOT published: open publish confirmation popup
+            const docNameEl = document.getElementById('publish-doc-name');
+            if (docNameEl) docNameEl.textContent = activeNoteName;
+            openModal('publish-modal');
+        }
+    });
+}
+
+function openPublishedStatusModal(publishedInfo) {
+    const info = publishedInfo || getPublishedInfoForNote(activeNoteName);
+    if (!info) return;
+
+    const docNameEl = document.getElementById('published-status-doc-name');
+    if (docNameEl) docNameEl.textContent = info.name || activeNoteName;
+
+    const firstDateEl = document.getElementById('published-status-first-date');
+    if (firstDateEl) firstDateEl.textContent = `Published: ${info.date || '-'}`;
+
+    const updatedDateEl = document.getElementById('published-status-updated-date');
+    if (updatedDateEl) updatedDateEl.textContent = `Updated: ${info.updatedAt || 'Never (Initial publish)'}`;
+
+    const linkInput = document.getElementById('published-status-link-input');
+    if (linkInput) linkInput.value = info.url || `${SUPABASE_CONFIG.viewerBaseUrl}?id=${info.id}`;
+
+    openModal('published-status-modal');
+}
+
+function copyPublishedStatusLink() {
+    const linkInput = document.getElementById('published-status-link-input');
+    if (!linkInput || !linkInput.value) return;
+
+    navigator.clipboard.writeText(linkInput.value).then(() => {
+        showToast('Public link copied to clipboard', 'success');
+    });
+}
+
+function openPublishedStatusExternal() {
+    const linkInput = document.getElementById('published-status-link-input');
+    if (linkInput && linkInput.value) {
+        if (typeof ipcRenderer !== 'undefined') {
+            ipcRenderer.invoke('open-external', linkInput.value);
+        } else {
+            window.open(linkInput.value, '_blank');
+        }
+    }
+}
+
+// Unpublish Note
+function confirmUnpublishNote() {
+    if (typeof activeNoteName === 'undefined' || !activeNoteName) return;
+
+    const info = getPublishedInfoForNote(activeNoteName);
+    if (!info) return;
+
+    const confirmed = confirm(`Are you sure you want to remove "${activeNoteName}" from the published list?`);
+    if (!confirmed) return;
+
+    removePublishedFile(info.id);
+    closeAllModals();
+    showToast(`"${activeNoteName}" removed from published list`, 'info');
+}
+
+// Execute In-Place Update to Live Note on Supabase
+async function executeUpdatePublishedNote() {
+    if (typeof activeNoteName === 'undefined' || !activeNoteName) return;
+
+    const publishedInfo = getPublishedInfoForNote(activeNoteName);
+    if (!publishedInfo || !publishedInfo.id) {
+        showToast('No published record found for this note', 'warning');
+        return;
+    }
+
+    const updateBtn = document.getElementById('publish-update-btn');
+    const originalText = updateBtn ? updateBtn.innerHTML : '';
+    if (updateBtn) {
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon> Updating Live Note...';
+    }
+
+    try {
+        // Auto-save local note if unsaved
+        if (typeof saveFile === 'function' && typeof hasUnsavedChanges !== 'undefined' && hasUnsavedChanges) {
+            await saveFile();
+        }
+
+        const rawCleanContent = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : content.innerHTML;
+        const cleanContent = await resolvePublishedMediaInHTML(rawCleanContent, (statusMsg) => {
+            if (updateBtn) {
+                updateBtn.innerHTML = `<iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon> ${statusMsg}`;
+            }
+        });
+        if (updateBtn) {
+            updateBtn.innerHTML = '<iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon> Updating Live Note...';
+        }
+        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes?id=eq.${encodeURIComponent(publishedInfo.id)}`;
+
+        const response = await fetch(endpoint, {
+            method: 'PATCH',
+            headers: {
+                'apikey': SUPABASE_CONFIG.anonKey,
+                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                title: activeNoteName,
+                content: cleanContent
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Update request failed (${response.status}): ${errText}`);
+        }
+
+        const result = await response.json();
+
+        // If Supabase RLS blocked UPDATE (0 rows affected)
+        if (!Array.isArray(result) || result.length === 0) {
+            console.warn('Supabase RLS prevented UPDATE on shared_notes (0 rows affected).');
+            closeModal('published-status-modal');
+            openModal('supabase-rls-help-modal');
+            return;
+        }
+
+        // Successfully updated existing live note!
+        const now = new Date();
+        const updateTimeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        publishedInfo.updatedAt = updateTimeStr;
+        publishedInfo.name = activeNoteName;
+        savePublishedRecord(publishedInfo);
+
+        const updatedDateEl = document.getElementById('published-status-updated-date');
+        if (updatedDateEl) updatedDateEl.textContent = `Updated: ${updateTimeStr}`;
+
+        updatePublishButtonState();
+        renderPublishedFilesList();
+
+        closeAllModals();
+        showToast('Live note updated successfully with latest changes!', 'success');
+
+    } catch (err) {
+        console.error('Error updating published note in Supabase:', err);
+        showToast(`Update error: ${err.message}`, 'error');
+    } finally {
+        if (updateBtn) {
+            updateBtn.disabled = false;
+            updateBtn.innerHTML = originalText || '<iconify-icon icon="solar:restart-linear"></iconify-icon> Update Live Note';
+        }
+    }
+}
+
+// Republish Note as New Independent Link
+async function republishAsNewLink() {
+    if (typeof activeNoteName === 'undefined' || !activeNoteName) return;
+
+    closeModal('published-status-modal');
+    closeModal('supabase-rls-help-modal');
+
+    // Auto-save local note if unsaved
+    if (typeof saveFile === 'function' && typeof hasUnsavedChanges !== 'undefined' && hasUnsavedChanges) {
+        await saveFile();
+    }
+
     const randomID = generateRandomID();
-    const htmlContent = document.getElementById('content').innerHTML;
-    
-    const fileContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <link rel="icon" href="../icon.ico" type="image/x-icon">
-            <title>${document.querySelector('.active').getAttribute('file-name')}</title>
-        </head>
-        <body>
-            <nav class="top-nav">
-                <img src="../icon.ico" onclick="window.location.href = 'https://cghost1908.github.io/nosh/';" class="top-nav-logo">
-                <h2 class="page-title">${document.querySelector('.active').getAttribute('file-name')}</h2>
-                <button class="top-nav-button" onclick="window.location.href = 'https://cghost1908.github.io/nosh/';">Download nosh</button>
-            </nav>
-            <div id="content">
-            ${htmlContent}
-            </div>
-        </body>
-        </html>
-        <style>
-            #content{
-                width: 100%;
-                max-width: 840px !important;
-            }
+    const rawCleanContent = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : content.innerHTML;
 
-            body{
-                padding: 60px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
+    showToast('Publishing as new link...', 'info');
 
-            .top-nav{
-                padding: 0 20px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                width: 100vw;
-                height: 50px;
-                position: fixed;
-                top: 0;
-                left: 0;
-                background-color: #232323;
-                z-index: 1000;
-            }
+    try {
+        const cleanContent = await resolvePublishedMediaInHTML(rawCleanContent);
+        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes`;
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_CONFIG.anonKey,
+                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+                id: randomID,
+                title: activeNoteName,
+                content: cleanContent
+            })
+        });
 
-            .top-nav-logo{
-                display: flex;
-                justify-self: flex-start;
-                width: 40px;
-                height: 40px;
-                cursor: pointer;
-            }
-            .page-title{
-                position: absolute;
-                left: 50%;
-                transform: translateX(-50%);
-            }
-            .top-nav-button{
-                border: none;
-                color: #fff;
-                background-color: transparent;
-                font-weight: bold;
-                font-size: 20px;
-                width: 180px;
-                margin-right: 20px;
-                border-radius: 10px;
-                cursor: pointer;
-                transition: 0.3s;
-            }
-            .top-nav-button:hover{
-                transform: scale(1.1);
-                color: #224478FF;
-            }
-        </style>
-        <link rel="stylesheet" href="../view.css">
-        <script>
-        document.querySelectorAll('.delete-code-button').forEach((button) => button.remove());
-        const CodeMirror = require('codemirror');
-        const { basicSetup } = require("@codemirror/basic-setup");
-        const { autocompletion } = require("@codemirror/autocomplete");
-        require('codemirror/lib/codemirror');
-        require('codemirror/addon/edit/closebrackets');
-        require('codemirror/addon/hint/show-hint');
-        require('codemirror/mode/clike/clike');
-        require('codemirror/mode/javascript/javascript');
-        require('codemirror/addon/hint/javascript-hint');
-        require('codemirror/mode/htmlmixed/htmlmixed');
-        require('codemirror/mode/xml/xml');  
-        require('codemirror/addon/hint/html-hint');
-        require('codemirror/mode/css/css');
-        require('codemirror/addon/hint/css-hint');
-        require('codemirror/mode/python/python');
-        require('codemirror/mode/php/php');
-        require('codemirror/mode/ruby/ruby');
-        require('codemirror/mode/go/go');
-        require('codemirror/mode/sql/sql');
-        require('codemirror/mode/shell/shell');
-        require('codemirror/mode/markdown/markdown');
-        require('codemirror/mode/yaml/yaml');
-        require('codemirror/mode/javascript/javascript'); 
-        require('codemirror/mode/haskell/haskell'); 
-        require('codemirror/mode/dart/dart'); 
-        require('codemirror/mode/groovy/groovy'); 
-        require('codemirror/mode/vhdl/vhdl'); 
-        require('codemirror/mode/verilog/verilog'); 
-        require('codemirror/mode/clojure/clojure'); 
-        require('codemirror/mode/swift/swift'); 
-        require('codemirror/mode/rust/rust'); 
-        require('codemirror/mode/elm/elm'); 
-        require('codemirror/mode/crystal/crystal'); 
-        require('codemirror/mode/r/r'); 
-        require('codemirror/mode/d/d'); 
-        require('codemirror/mode/tcl/tcl'); 
-        require('codemirror/mode/powershell/powershell'); 
-        require('codemirror/mode/xml/xml'); 
-        function processCodeBlock(){
-            removeAllCodeMirrors();
-            const codeBlocks = document.querySelectorAll('.code');
-            codeBlocks.forEach((textarea) => {
-                const language = textarea.getAttribute('language');
-
-                const codeBlock = CodeMirror.fromTextArea(textarea, {
-                    lineNumbers: true,
-                    mode: language,
-                    theme: "dracula",
-                    autoCloseBrackets: true,
-                    indentUnit: 4,
-                    smartIndent: true,
-                    indentWithTabs: true,
-                    matchBrackets: true,
-                    fixedGutter: true,
-                    keyMap: "sublime",
-                    extensions: [
-                        basicSetup,
-                        autocompletion()
-                    ],
-                });
-                codeBlock.setSize("100%", "auto");
-                codeBlock.on('change', function(instance) {
-                    let content = instance.getValue();
-                    textarea.textContent = content;
-                });
-            });
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Upload failed (${response.status}): ${errText}`);
         }
-        function removeAllCodeMirrors() {
-            const codeMirrors = document.querySelectorAll('.CodeMirror');
-            codeMirrors.forEach(function(codeMirror) {
-                codeMirror.remove();
-            });
-        }
-        processCodeBlock();
-        </script>
-        <script src="https://code.iconify.design/2/2.0.3/iconify.min.js"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.css">
-        <link href="https://cdnjs.cloudflare.com/ajax/libs/roundSlider/1.3.2/roundslider.min.css" rel="stylesheet" />
-        <!--Themes-->
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/3024-day.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/3024-night.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/abbott.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/abcdef.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ambiance.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ambiance-mobile.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ayu-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ayu-mirage.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/base16-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/base16-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/bespin.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/blackboard.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/cobalt.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/colorforth.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/darcula.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/dracula.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/duotone-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/duotone-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/eclipse.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/elegant.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/erlang-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/gruvbox-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/hopscotch.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/icecoder.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/idea.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/isotope.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/juejin.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/lesser-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/liquibyte.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/lucario.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material-darker.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material-ocean.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material-palenight.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/mbo.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/mdn-like.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/midnight.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/monokai.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/moxer.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/neat.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/neo.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/night.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/nord.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/oceanic-next.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/panda-syntax.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/paraiso-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/paraiso-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/pastel-on-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/railscasts.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/rubyblue.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/seti.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/shadowfox.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/solarized.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ssms.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/the-matrix.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/tomorrow-night-bright.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/tomorrow-night-eighties.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ttcn.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/twilight.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/vibrant-ink.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/xq-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/xq-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/yeti.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/yonce.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/zenburn.css">
-        <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
-    `;
 
-    ipcRenderer.send('upload-to-github', {
-        fileContent: fileContent,
-        randomID: randomID
+        const shareLink = `${SUPABASE_CONFIG.viewerBaseUrl}?id=${randomID}`;
+        const linkInput = document.getElementById('published-link-input');
+        if (linkInput) linkInput.value = shareLink;
+
+        savePublishedRecord({
+            id: randomID,
+            name: activeNoteName,
+            url: shareLink,
+            date: new Date().toLocaleDateString(),
+            updatedAt: null
+        });
+
+        updatePublishButtonState();
+        renderPublishedFilesList();
+
+        closeAllModals();
+        openModal('publish-success-modal');
+        showToast('Published as new live link successfully!', 'success');
+
+    } catch (err) {
+        console.error('Error republishing note to Supabase:', err);
+        showToast(`Publish error: ${err.message}`, 'error');
+    }
+}
+
+// Copy Supabase RLS SQL Command
+function copySupabaseRlsSql() {
+    const codeEl = document.getElementById('supabase-rls-sql-code');
+    if (!codeEl) return;
+    navigator.clipboard.writeText(codeEl.textContent.trim()).then(() => {
+        showToast('SQL command copied to clipboard!', 'success');
     });
 }
 
+// Execute Initial Publish to Supabase Cloud
+async function executePublishNote() {
+    if (typeof activeNoteName === 'undefined' || !activeNoteName) return;
 
-ipcRenderer.on('github-upload-response', (event, response) => {
-    if(response.success){
-        closeOverlay();
-        document.querySelector('.confirm-publish').innerHTML = 'Publish';
-        document.querySelectorAll('.share-confirm-popup button').forEach((button) => button.disabled = false);
-        const shareLink = `https://cghost1908.github.io/nosh/uploads/${response.randomID}.html`;
-        const shareLinkInput = document.querySelector('.share-link-input');
-        shareLinkInput.value = shareLink;
-        shareLinkInput.select();
-        document.execCommand('copy');
+    const publishConfirmBtn = document.getElementById('publish-confirm-btn');
+    if (publishConfirmBtn) {
+        publishConfirmBtn.disabled = true;
+        publishConfirmBtn.textContent = 'Publishing to Cloud...';
+    }
 
-        overlay.style.opacity = ".3";
-        overlay.style.pointerEvents = "all";
-        popupSection.style.opacity = "1";
-        popupSection.style.pointerEvents = "all";
-        document.querySelector('.github-uploaded-popup').style.opacity = "1";
-        document.querySelector('.github-uploaded-popup').style.pointerEvents = "all";
-        copiedNotification();
+    // Auto-save local note if unsaved
+    if (typeof saveFile === 'function' && typeof hasUnsavedChanges !== 'undefined' && hasUnsavedChanges) {
+        await saveFile();
+    }
 
-        const publishData = { 
-            id: response.randomID, 
-            name: document.querySelector('.active').getAttribute('file-name') 
-        };
+    const randomID = generateRandomID();
+    const rawCleanContent = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : content.innerHTML;
 
-        if(localStorage.getItem("publishedFiles") === null){
-            localStorage.setItem("publishedFiles", JSON.stringify([]));
+    try {
+        const cleanContent = await resolvePublishedMediaInHTML(rawCleanContent, (statusMsg) => {
+            if (publishConfirmBtn) {
+                publishConfirmBtn.textContent = statusMsg;
+            }
+        });
+        if (publishConfirmBtn) {
+            publishConfirmBtn.textContent = 'Publishing to Cloud...';
+        }
+        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes`;
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_CONFIG.anonKey,
+                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+                id: randomID,
+                title: activeNoteName,
+                content: cleanContent
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Upload failed (${response.status}): ${errText}`);
         }
 
-        const storedFiles = JSON.parse(localStorage.getItem("publishedFiles")) || [];
-        storedFiles.push(publishData);
-        localStorage.setItem("publishedFiles", JSON.stringify(storedFiles));
+        const shareLink = `${SUPABASE_CONFIG.viewerBaseUrl}?id=${randomID}`;
+        const linkInput = document.getElementById('published-link-input');
+        if (linkInput) linkInput.value = shareLink;
 
-    }else{
-        
+        // Store published file info in localStorage
+        savePublishedRecord({
+            id: randomID,
+            name: activeNoteName,
+            url: shareLink,
+            date: new Date().toLocaleDateString(),
+            updatedAt: null
+        });
+
+        updatePublishButtonState();
+        renderPublishedFilesList();
+
+        closeAllModals();
+        openModal('publish-success-modal');
+        showToast('Note published online successfully!', 'success');
+
+    } catch (err) {
+        console.error('Error publishing note to Supabase:', err);
+        showToast(`Publish error: ${err.message}`, 'error');
+    } finally {
+        if (publishConfirmBtn) {
+            publishConfirmBtn.disabled = false;
+            publishConfirmBtn.textContent = 'Publish Online';
+        }
     }
-});
+}
 
+function copyPublishedLink() {
+    const linkInput = document.getElementById('published-link-input');
+    if (!linkInput) return;
 
-function showPublishedFiles(){
-    const publishedFiles = JSON.parse(localStorage.getItem("publishedFiles")) || [];
-    const publishedFilesContainer = document.querySelector('.published-files-container');
-    publishedFilesContainer.innerHTML = '';
+    navigator.clipboard.writeText(linkInput.value).then(() => {
+        showToast('Public link copied to clipboard', 'success');
+    });
+}
 
-    publishedFiles.forEach((file) => {
-        const fileElement = document.createElement('div');
-        fileElement.classList.add('published-file');
-        fileElement.setAttribute('file-id', file.id);
-        const url = `https://cghost1908.github.io/nosh/uploads/${file.id}.html`;
-        fileElement.innerHTML = `
-            <nav style="width: 100%; max-width: 1000px;">
-            <button onclick="shell.openExternal('${url}')">Open in Browser</button>
-            <button onclick="navigator.clipboard.writeText('${url}'); copiedNotification();">Copy Link</button>
-            <button onclick="updatePublishedFile('${file.id}')">Update</button>
-            <button onclick="deletePublishedFile('${file.id}')">Delete</button>
-            </nav>
-            <webview 
-                class="file-preview" 
-                src="${url}" 
-                style="width: 100%; height: 400px; max-width: 1000px; border: 2px solid #ffffff27; pointer-events: none; border-radius: 0px;">
-            </webview>
-            <!--<script>
-                const webview = document.querySelector('.file-preview');
+function openPublishedUrlExternal() {
+    const linkInput = document.getElementById('published-link-input');
+    if (linkInput && linkInput.value) {
+        if (typeof ipcRenderer !== 'undefined') {
+            ipcRenderer.invoke('open-external', linkInput.value);
+        } else {
+            window.open(linkInput.value, '_blank');
+        }
+    }
+}
 
-                webview.addEventListener('did-attach', () => {
-                    webview.setZoomFactor(0.1);
-                });
-            </script>-->
+// Render Published Files in Settings
+function renderPublishedFilesList() {
+    const container = document.getElementById('published-files-list');
+    if (!container) return;
+
+    const files = JSON.parse(localStorage.getItem('publishedFiles')) || [];
+
+    if (files.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px dashed var(--border-medium);">
+                <iconify-icon icon="solar:cloud-upload-linear" style="font-size: 36px; opacity: 0.5; margin-bottom: 8px;"></iconify-icon>
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No published notes yet</div>
+                <div>Use the "Publish" button in the note toolbar to publish any note to Supabase Cloud.</div>
+            </div>
         `;
-        publishedFilesContainer.appendChild(fileElement);
-    });
-}
-
-async function getFileSHA(fileId){
-    const githubURL = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/uploads/${fileId}.html`;
-    
-    const response = await fetch(githubURL, {
-        method: 'GET',
-        headers: {
-            'Authorization': `token ${githubToken}`,
-            'Accept': 'application/vnd.github.v3+json'
-        }
-    });
-
-    if(response.ok){
-        const data = await response.json();
-        return data.sha;
-    }else{
-        alert('SHA Error!')
+        return;
     }
-}
 
+    container.innerHTML = '';
 
-async function deletePublishedFile(fileId){
-    const githubURL = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/uploads/${fileId}.html`;
-    const sha = await getFileSHA(fileId);
+    files.forEach((file) => {
+        const card = document.createElement('div');
+        card.className = 'published-file-card';
+        card.setAttribute('data-id', file.id);
+        const fileDate = file.date || new Date().toLocaleDateString();
+        const updatedBadge = file.updatedAt ? `<span class="published-date-badge" title="Last updated: ${file.updatedAt}">• Updated: ${file.updatedAt}</span>` : '';
 
-    document.querySelector('.published-files-busy').style.display = "flex";
-
-    const response = await fetch(githubURL, {
-        method: 'DELETE',
-        headers: {
-            'Authorization': `token ${githubToken}`,
-            'Accept': 'application/vnd.github.v3+json',
-        },
-        body: JSON.stringify({
-            message: `Delete ${fileId}.html`,
-            sha: sha
-        })
-    });
-    if (response.ok){
-        let storedFiles = JSON.parse(localStorage.getItem("publishedFiles")) || [];
-        storedFiles = storedFiles.filter(file => file.id !== fileId);
-        localStorage.setItem("publishedFiles", JSON.stringify(storedFiles));
-        document.querySelector(`[file-id="${fileId}"]`).remove();
-
-    }else{
-        alert('An error occurred while deleting the file.');
-    }
-    document.querySelector('.published-files-busy').style.display = "none";
-}
-
-let isEventListenerAddedToUpdateFileButton = false;
-
-function updatePublishedFile(fileId){
-    showSavesPopup();
-
-    function updateFileClickHandler(){
-        const fileName = document.querySelector('.files-popup .selected span').textContent;
-        confirmUpdateFile(fileId, fileName);
-    }
-    
-    const updateFileButton = document.querySelector('.update-file-website');
-
-    if (!isEventListenerAddedToUpdateFileButton) {
-        updateFileButton.addEventListener('click', updateFileClickHandler);
-        isEventListenerAddedToUpdateFileButton = true;
-    }
-}
-
-async function confirmUpdateFile(fileId, sendingFile){
-    document.querySelector('.files-popup-loading').style.display = 'flex';
-
-    const filePath = path.join(savesDir, `${sendingFile}.nsh`);
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const webContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <link rel="icon" href="../icon.ico" type="image/x-icon">
-            <title>${sendingFile}</title>
-        </head>
-        <body>
-            <nav class="top-nav">
-                <img src="../icon.ico" onclick="window.location.href = 'https://cghost1908.github.io/nosh/';" class="top-nav-logo">
-                <h2 class="page-title">${sendingFile}</h2>
-                <button class="top-nav-button" onclick="window.location.href = 'https://cghost1908.github.io/nosh/';">Download nosh</button>
-            </nav>
-            <div id="content">
-            ${fileContent}
+        card.innerHTML = `
+            <div class="published-card-header">
+                <div class="published-file-info">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span class="published-file-name">${escapeHtml(file.name || 'Untitled')}</span>
+                        <span class="published-badge-live">
+                            <span class="live-dot"></span> Live
+                        </span>
+                        <span class="published-date-badge">${fileDate}</span>
+                        ${updatedBadge}
+                    </div>
+                    <div class="published-url-bar">
+                        <span class="published-file-url">${file.url}</span>
+                        <button class="published-mini-btn" onclick="navigator.clipboard.writeText('${file.url}'); showToast('Copied public link', 'success');" title="Copy URL">
+                            <iconify-icon icon="solar:copy-linear"></iconify-icon>
+                        </button>
+                    </div>
+                </div>
+                <div class="published-file-actions">
+                    <button class="btn-secondary btn-sm" onclick="togglePublishedPreview('${file.id}')" id="preview-btn-${file.id}" title="Toggle live preview">
+                        <iconify-icon icon="solar:eye-linear"></iconify-icon>
+                        <span>Preview</span>
+                    </button>
+                    <button class="btn-secondary btn-sm" onclick="updatePublishedFileFromList('${file.id}')" title="Update online with latest local changes">
+                        <iconify-icon icon="solar:restart-linear"></iconify-icon>
+                        <span>Update</span>
+                    </button>
+                    <button class="btn-secondary btn-sm" onclick="ipcRenderer.invoke('open-external', '${file.url}')" title="Open in browser">
+                        <iconify-icon icon="solar:arrow-right-up-linear"></iconify-icon>
+                        <span>Browser</span>
+                    </button>
+                    <button class="btn-danger btn-sm" onclick="deletePublishedFile('${file.id}')" title="Remove from list">
+                        <iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon>
+                    </button>
+                </div>
             </div>
-        </body>
-        </html>
-        <style>
-            #content{
-                width: 100%;
-                max-width: 840px !important;
-            }
-
-            body{
-                padding: 60px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            .top-nav{
-                padding: 0 20px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                width: 100vw;
-                height: 50px;
-                position: fixed;
-                top: 0;
-                left: 0;
-                background-color: #232323;
-                z-index: 1000;
-            }
-
-            .top-nav-logo{
-                display: flex;
-                justify-self: flex-start;
-                width: 40px;
-                height: 40px;
-                cursor: pointer;
-            }
-            .page-title{
-                position: absolute;
-                left: 50%;
-                transform: translateX(-50%);
-            }
-            .top-nav-button{
-                border: none;
-                color: #fff;
-                background-color: transparent;
-                font-weight: bold;
-                font-size: 20px;
-                width: 180px;
-                margin-right: 20px;
-                border-radius: 10px;
-                cursor: pointer;
-                transition: 0.3s;
-            }
-            .top-nav-button:hover{
-                transform: scale(1.1);
-                color: #224478FF;
-            }
-        </style>
-        <link rel="stylesheet" href="../view.css">
-        <script>
-        document.querySelectorAll('.delete-code-button').forEach((button) => button.remove());
-        const CodeMirror = require('codemirror');
-        const { basicSetup } = require("@codemirror/basic-setup");
-        const { autocompletion } = require("@codemirror/autocomplete");
-        require('codemirror/lib/codemirror');
-        require('codemirror/addon/edit/closebrackets');
-        require('codemirror/addon/hint/show-hint');
-        require('codemirror/mode/clike/clike');
-        require('codemirror/mode/javascript/javascript');
-        require('codemirror/addon/hint/javascript-hint');
-        require('codemirror/mode/htmlmixed/htmlmixed');
-        require('codemirror/mode/xml/xml');  
-        require('codemirror/addon/hint/html-hint');
-        require('codemirror/mode/css/css');
-        require('codemirror/addon/hint/css-hint');
-        require('codemirror/mode/python/python');
-        require('codemirror/mode/php/php');
-        require('codemirror/mode/ruby/ruby');
-        require('codemirror/mode/go/go');
-        require('codemirror/mode/sql/sql');
-        require('codemirror/mode/shell/shell');
-        require('codemirror/mode/markdown/markdown');
-        require('codemirror/mode/yaml/yaml');
-        require('codemirror/mode/javascript/javascript'); 
-        require('codemirror/mode/haskell/haskell'); 
-        require('codemirror/mode/dart/dart'); 
-        require('codemirror/mode/groovy/groovy'); 
-        require('codemirror/mode/vhdl/vhdl'); 
-        require('codemirror/mode/verilog/verilog'); 
-        require('codemirror/mode/clojure/clojure'); 
-        require('codemirror/mode/swift/swift'); 
-        require('codemirror/mode/rust/rust'); 
-        require('codemirror/mode/elm/elm'); 
-        require('codemirror/mode/crystal/crystal'); 
-        require('codemirror/mode/r/r'); 
-        require('codemirror/mode/d/d'); 
-        require('codemirror/mode/tcl/tcl'); 
-        require('codemirror/mode/powershell/powershell'); 
-        require('codemirror/mode/xml/xml'); 
-        function processCodeBlock(){
-            removeAllCodeMirrors();
-            const codeBlocks = document.querySelectorAll('.code');
-            codeBlocks.forEach((textarea) => {
-                const language = textarea.getAttribute('language');
-
-                const codeBlock = CodeMirror.fromTextArea(textarea, {
-                    lineNumbers: true,
-                    mode: language,
-                    theme: "dracula",
-                    autoCloseBrackets: true,
-                    indentUnit: 4,
-                    smartIndent: true,
-                    indentWithTabs: true,
-                    matchBrackets: true,
-                    fixedGutter: true,
-                    keyMap: "sublime",
-                    extensions: [
-                        basicSetup,
-                        autocompletion()
-                    ],
-                });
-                codeBlock.setSize("100%", "auto");
-                codeBlock.on('change', function(instance) {
-                    let content = instance.getValue();
-                    textarea.textContent = content;
-                });
-            });
-        }
-        function removeAllCodeMirrors() {
-            const codeMirrors = document.querySelectorAll('.CodeMirror');
-            codeMirrors.forEach(function(codeMirror) {
-                codeMirror.remove();
-            });
-        }
-        processCodeBlock();
-        </script>
-        <script src="https://code.iconify.design/2/2.0.3/iconify.min.js"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.css">
-        <link href="https://cdnjs.cloudflare.com/ajax/libs/roundSlider/1.3.2/roundslider.min.css" rel="stylesheet" />
-        <!--Themes-->
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/3024-day.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/3024-night.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/abbott.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/abcdef.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ambiance.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ambiance-mobile.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ayu-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ayu-mirage.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/base16-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/base16-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/bespin.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/blackboard.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/cobalt.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/colorforth.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/darcula.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/dracula.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/duotone-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/duotone-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/eclipse.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/elegant.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/erlang-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/gruvbox-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/hopscotch.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/icecoder.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/idea.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/isotope.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/juejin.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/lesser-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/liquibyte.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/lucario.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material-darker.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material-ocean.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/material-palenight.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/mbo.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/mdn-like.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/midnight.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/monokai.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/moxer.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/neat.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/neo.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/night.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/nord.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/oceanic-next.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/panda-syntax.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/paraiso-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/paraiso-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/pastel-on-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/railscasts.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/rubyblue.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/seti.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/shadowfox.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/solarized.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ssms.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/the-matrix.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/tomorrow-night-bright.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/tomorrow-night-eighties.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/ttcn.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/twilight.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/vibrant-ink.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/xq-dark.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/xq-light.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/yeti.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/yonce.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/theme/zenburn.css">
-        <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
-    `;
-
-    const githubURL = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/uploads/${fileId}.html`;
-    const sha = await getFileSHA(fileId);
-    const response = await fetch(githubURL, {
-        method: 'PUT',
-        headers: {
-            'Authorization': `token ${githubToken}`,
-            'Accept': 'application/vnd.github.v3+json',
-        },
-        body: JSON.stringify({
-            message: `Update ${fileId}.html`,
-            content: Buffer.from(webContent).toString('base64'),
-            sha: sha,
-        }),
+            <div class="published-preview-wrap" id="preview-wrap-${file.id}" style="display: none;">
+                <div class="preview-browser-bar">
+                    <span class="browser-dot"></span>
+                    <span class="browser-dot"></span>
+                    <span class="browser-dot"></span>
+                    <span class="browser-url-text">${file.url}</span>
+                </div>
+                <iframe class="published-file-webview" data-src="${file.url}" style="width:100%; height:260px; border:none; background:#0d0f12;"></iframe>
+            </div>
+        `;
+        container.appendChild(card);
     });
-
-    const data = await response.json();
-
-    if(data.content){
-        document.querySelector('.files-popup-loading').style.display = 'none';
-        document.querySelector('.files-popup-success').style.display = 'flex';
-    }else{
-        alert('Failed to update file');
-    }
 }
 
+// Update Published Note Directly From Settings List
+async function updatePublishedFileFromList(fileId) {
+    const list = JSON.parse(localStorage.getItem('publishedFiles')) || [];
+    const item = list.find(f => f.id === fileId);
+    if (!item) return;
 
-async function showSavesPopup(){
-    overlay.style.opacity = ".3";
-    overlay.style.pointerEvents = "all";
-    popupSection.style.opacity = "1";
-    popupSection.style.pointerEvents = "all";
-    document.querySelector('.files-popup').style.opacity = "1";
-    document.querySelector('.files-popup').style.pointerEvents = "all";
-    document.querySelector('.files-popup ul').innerHTML = '';
+    if (typeof savesDir === 'undefined') {
+        showToast('Saves directory not accessible', 'error');
+        return;
+    }
 
-    const files = await fsPromises.readdir(savesDir);
-    const nshFiles = files.filter(file => path.extname(file) === '.nsh');
+    const safeTarget = path.basename(item.name, '.nsh');
+    const filePath = path.join(savesDir, `${safeTarget}.nsh`);
 
-    for(const file of nshFiles){
-        const filePath = path.join(savesDir, file);
-        const data = await fsPromises.readFile(filePath, 'utf8'); 
-        const fileName = file.slice(0, -4);
-        const filesPopupUl = document.querySelector('.files-popup ul');
-        const createSave = document.createElement('li');
-        createSave.onclick = function(){
-            selectFile(fileName);
+    if (!fs.existsSync(filePath)) {
+        showToast(`Local note file "${item.name}" not found on disk`, 'error');
+        return;
+    }
+
+    try {
+        showToast(`Updating "${item.name}" in cloud...`, 'info');
+        let noteHTML = '';
+        if (typeof activeNoteName !== 'undefined' && activeNoteName && path.basename(activeNoteName, '.nsh').toLowerCase() === safeTarget.toLowerCase()) {
+            noteHTML = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : content.innerHTML;
+        } else {
+            noteHTML = await fsPromises.readFile(filePath, 'utf8');
+        }
+        noteHTML = await resolvePublishedMediaInHTML(noteHTML);
+
+        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes?id=eq.${encodeURIComponent(fileId)}`;
+        const response = await fetch(endpoint, {
+            method: 'PATCH',
+            headers: {
+                'apikey': SUPABASE_CONFIG.anonKey,
+                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                title: item.name,
+                content: noteHTML
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
 
-        createSave.textContent = '📄 ' + fileName;
+        const result = await response.json();
+        if (!Array.isArray(result) || result.length === 0) {
+            openModal('supabase-rls-help-modal');
+            return;
+        }
 
-        filesPopupUl.appendChild(createSave);
+        const now = new Date();
+        const updateTimeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        item.updatedAt = updateTimeStr;
+        localStorage.setItem('publishedFiles', JSON.stringify(list));
+        renderPublishedFilesList();
+        updatePublishButtonState();
+        showToast(`"${item.name}" updated online successfully!`, 'success');
+
+    } catch (err) {
+        console.error('Error updating file from list:', err);
+        showToast(`Update failed: ${err.message}`, 'error');
     }
 }
 
+function togglePublishedPreview(fileId) {
+    const wrap = document.getElementById(`preview-wrap-${fileId}`);
+    const btn = document.getElementById(`preview-btn-${fileId}`);
+    if (!wrap) return;
 
-function selectFile(fileName){
-    selected.querySelector("span").textContent = fileName;
-    optionsList.classList.remove("active-option");
-    selected.classList.remove("sharp");
-
-    document.querySelector('.update-file-website').style.display = 'block';
+    const isHidden = wrap.style.display === 'none';
+    if (isHidden) {
+        wrap.style.display = 'block';
+        if (btn) btn.classList.add('active');
+        const iframe = wrap.querySelector('iframe');
+        if (iframe && !iframe.src && iframe.getAttribute('data-src')) {
+            iframe.src = iframe.getAttribute('data-src');
+        }
+    } else {
+        wrap.style.display = 'none';
+        if (btn) btn.classList.remove('active');
+    }
 }
 
-//120
-//3579
-//621617
-//
+function deletePublishedFile(fileId) {
+    removePublishedFile(fileId);
+}
+
+function removePublishedFile(fileId) {
+    let files = JSON.parse(localStorage.getItem('publishedFiles')) || [];
+    files = files.filter(f => f.id !== fileId);
+    localStorage.setItem('publishedFiles', JSON.stringify(files));
+    updatePublishButtonState();
+    renderPublishedFilesList();
+    showToast('Removed from published list', 'info');
+}
+
+// Initial state check
+if (typeof activeNoteName !== 'undefined' && activeNoteName) {
+    updatePublishButtonState();
+}
