@@ -212,6 +212,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/yaml/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/markdown/markdown.min.js"></script>
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <!-- Sanitizer for untrusted note HTML (shared notes are user-submitted content) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" integrity="sha512-YlctBG9PGZIhh9keoqI3eZkQM9T8QUbiBi7qNYAO/TUEo8jqWX5pLp5+x1cKRQDRzJ/lyGyJ9WUVNIRduxIIFw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
     <!-- Header Navigation (Synchronized with Nosh Website) -->
@@ -316,6 +318,30 @@
                 .catch(() => alert('Failed to copy link.'));
         }
 
+        // Shared notes are written by anyone who can publish, so their HTML is untrusted.
+        // Strip scripts, event handlers and javascript: URLs before it touches the DOM.
+        // If the sanitizer failed to load, fail closed and show the raw markup as plain text.
+        function sanitizeNoteHTML(html) {
+            if (!window.DOMPurify) return null;
+            return window.DOMPurify.sanitize(html || '', {
+                ADD_TAGS: ['source'],
+                ADD_ATTR: ['language'],
+                FORBID_TAGS: ['style', 'form', 'iframe', 'object', 'embed'],
+                FORBID_ATTR: ['srcdoc', 'formaction']
+            });
+        }
+
+        function renderNoteBody(container, rawHtml) {
+            const safeHtml = sanitizeNoteHTML(rawHtml);
+            if (safeHtml === null) {
+                console.error('DOMPurify unavailable; rendering note as plain text.');
+                container.textContent = rawHtml || '';
+                return;
+            }
+            container.innerHTML = safeHtml;
+            initInteractiveElements(container);
+        }
+
         function mapLanguageMode(raw) {
             if (!raw) return 'javascript';
             const lower = raw.toLowerCase().trim();
@@ -366,13 +392,15 @@
                 header.className = 'code-block-header';
                 header.innerHTML = `
                     <div class="code-header-left">
-                        <span class="code-lang-tag">${rawLang}</span>
+                        <span class="code-lang-tag"></span>
                     </div>
                     <div class="code-block-actions">
                         <button class="code-action-btn wrap-btn" title="Toggle line wrap">Wrap</button>
                         <button class="code-action-btn copy-btn" title="Copy code">Copy</button>
                     </div>
                 `;
+                // rawLang comes from note text, so never interpolate it into HTML
+                header.querySelector('.code-lang-tag').textContent = rawLang;
 
                 const newTa = document.createElement('textarea');
                 newTa.className = 'code';
@@ -414,7 +442,7 @@
             }
 
             try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/shared_notes?id=eq.${encodeURIComponent(noteId)}&select=*`, {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/shared_notes?id=eq.${encodeURIComponent(noteId)}&select=id,title,content,created_at`, {
                     headers: {
                         'apikey': SUPABASE_ANON_KEY,
                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -447,8 +475,7 @@
                 articleEl.style.display = 'block';
 
                 if (noteBody) {
-                    noteBody.innerHTML = note.content;
-                    initInteractiveElements(noteBody);
+                    renderNoteBody(noteBody, note.content);
                 }
 
             } catch (err) {
