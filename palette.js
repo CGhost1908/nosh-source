@@ -5,6 +5,7 @@ const commandPaletteActions = [
     { id: 'new-folder', title: 'New Folder', category: 'Action', icon: 'solar:folder-add-linear', action: () => openCreateFolderModal() },
     { id: 'new-template', title: 'New Note from Template...', category: 'Action', icon: 'solar:layers-minimalistic-linear', action: () => openTemplateModal() },
     { id: 'save-note', title: 'Save Note', category: 'Action', icon: 'solar:diskette-linear', action: () => saveFile() },
+    { id: 'note-history', title: 'Version History of This Note', category: 'Action', icon: 'solar:history-linear', action: () => openNoteHistory() },
     { id: 'export-md', title: 'Export as Markdown (.md)', category: 'Export', icon: 'solar:document-add-linear', action: () => exportToMarkdown() },
     { id: 'copy-md', title: 'Copy Note as Markdown', category: 'Action', icon: 'solar:copy-linear', action: () => copyAsMarkdown() },
     { id: 'export-pdf', title: 'Export as PDF', category: 'Export', icon: 'solar:file-text-linear', action: () => exportToPdf() },
