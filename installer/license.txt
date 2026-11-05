@@ -1,0 +1,64 @@
+NOSH - LICENSE AND PRIVACY NOTICE
+=================================
+
+Please read the license and the privacy notice below before installing Nosh.
+
+
+PART 1 - LICENSE (MIT)
+----------------------
+
+Copyright (c) 2025 CGhost1908 and Nosh contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+PART 2 - PRIVACY NOTICE
+-----------------------
+
+Nosh stores your notes locally on your computer. It does not collect
+telemetry or usage analytics.
+
+Nosh only connects to other networked systems when you explicitly use a
+feature that needs them:
+
+  * Google Drive sync - only after you sign in with your Google account.
+    Nosh accesses only the files and folders you choose to use with Nosh.
+    You can disconnect your account at any time in the app settings.
+
+  * Public note sharing (Supabase) - only when you choose to publish a note.
+    The published note's content is uploaded so that it can be viewed by
+    anyone with the link. Notes you do not publish are never uploaded.
+
+  * Embedded web content (e.g. YouTube player) - only when you open it.
+
+If you do not use these features, Nosh does not send your data anywhere.
+
+Full privacy policy:
+https://github.com/CGhost1908/nosh-source/blob/main/privacy-policy.md
+
+Third-party privacy policies:
+  Google:   https://policies.google.com/privacy
+  Supabase: https://supabase.com/privacy
+
+
+UNINSTALLING
+------------
+
+Nosh can be removed at any time from Windows Settings > Apps > Installed apps,
+or by running "Uninstall Nosh" from the installation folder.

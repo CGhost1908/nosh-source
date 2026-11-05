@@ -1,0 +1,86 @@
+# Builds the Windows installer from source and (once SignPath is set up)
+# sends it to SignPath for code signing.
+#
+# Trigger: push a tag like v1.4.1, or run manually from the Actions tab.
+#
+# SignPath setup (one time, by the repo owner):
+#   - Repository secret   SIGNPATH_API_TOKEN       -> API token of the SignPath CI user
+#   - Repository variable SIGNPATH_ORGANIZATION_ID -> SignPath organization ID
+# Until the variable is set, the signing steps are skipped and the
+# unsigned installer is still uploaded as a build artifact.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      SIGNPATH_ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Upload unsigned installer
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: nosh-windows-unsigned
+          path: dist/Nosh-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: env.SIGNPATH_ORG != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: nosh
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: initial
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Upload signed installer
+        if: env.SIGNPATH_ORG != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: nosh-windows-signed
+          path: signed/
+          if-no-files-found: error
+
+      - name: Attach signed installer to GitHub release
+        if: env.SIGNPATH_ORG != '' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem signed -Recurse -Filter *.exe | Select-Object -First 1
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --title $env:GITHUB_REF_NAME --generate-notes
+          }
+          gh release upload $env:GITHUB_REF_NAME $exe.FullName --clobber
