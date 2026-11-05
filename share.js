@@ -6,13 +6,84 @@ const SUPABASE_CONFIG = {
     viewerBaseUrl: 'https://cghost1908.github.io/nosh/view.html'
 };
 
-function generateRandomID() {
+// Public note IDs end up in shareable URLs, so use the CSPRNG instead of Math.random()
+function generateRandomID(length = 16) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const limit = 256 - (256 % chars.length); // reject biased bytes
     let res = '';
-    for (let i = 0; i < 12; i++) {
-        res += chars.charAt(Math.floor(Math.random() * chars.length));
+    while (res.length < length) {
+        const bytes = window.crypto.getRandomValues(new Uint8Array(length));
+        for (const b of bytes) {
+            if (b < limit && res.length < length) res += chars[b % chars.length];
+        }
     }
     return res;
+}
+
+// Secret that proves ownership of a published note. Only its SHA-256 hash is stored
+// in Supabase (see supabase/secure_shared_notes.sql); the token itself stays local.
+function generateEditToken() {
+    const bytes = window.crypto.getRandomValues(new Uint8Array(32));
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function callSupabaseRpc(fnName, args) {
+    const response = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/rpc/${fnName}`, {
+        method: 'POST',
+        headers: {
+            'apikey': SUPABASE_CONFIG.anonKey,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(args)
+    });
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`${fnName} failed (${response.status}): ${errText}`);
+    }
+    return response.json();
+}
+
+// Create a new shared note and return the local record to persist
+async function publishNewSharedNote(title, noteHTML) {
+    const id = generateRandomID();
+    const editToken = generateEditToken();
+
+    await callSupabaseRpc('publish_shared_note', {
+        p_id: id,
+        p_title: title,
+        p_content: noteHTML,
+        p_edit_token: editToken
+    });
+
+    return {
+        id,
+        name: title,
+        url: `${SUPABASE_CONFIG.viewerBaseUrl}?id=${id}`,
+        date: new Date().toLocaleDateString(),
+        updatedAt: null,
+        editToken
+    };
+}
+
+// Update a shared note in place. Returns false when this device has no valid
+// edit token for it (e.g. it was published by an older Nosh version).
+async function updateSharedNote(record, title, noteHTML) {
+    if (!record || !record.id || !record.editToken) return false;
+
+    const updated = await callSupabaseRpc('update_shared_note', {
+        p_id: record.id,
+        p_edit_token: record.editToken,
+        p_title: title,
+        p_content: noteHTML
+    });
+    return updated === true;
+}
+
+function formatUpdateTime() {
+    const now = new Date();
+    return now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 // Persistent cache mapping local asset paths (e.g., "assets/asset_123.png") to Catbox URLs
@@ -316,40 +387,16 @@ async function executeUpdatePublishedNote() {
         if (updateBtn) {
             updateBtn.innerHTML = '<iconify-icon icon="eos-icons:three-dots-loading"></iconify-icon> Updating Live Note...';
         }
-        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes?id=eq.${encodeURIComponent(publishedInfo.id)}`;
-
-        const response = await fetch(endpoint, {
-            method: 'PATCH',
-            headers: {
-                'apikey': SUPABASE_CONFIG.anonKey,
-                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-                title: activeNoteName,
-                content: cleanContent
-            })
-        });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Update request failed (${response.status}): ${errText}`);
-        }
-
-        const result = await response.json();
-
-        // If Supabase RLS blocked UPDATE (0 rows affected)
-        if (!Array.isArray(result) || result.length === 0) {
-            console.warn('Supabase RLS prevented UPDATE on shared_notes (0 rows affected).');
+        const updated = await updateSharedNote(publishedInfo, activeNoteName, cleanContent);
+        if (!updated) {
+            console.warn('No valid edit token for this published note; it cannot be updated in place.');
             closeModal('published-status-modal');
-            openModal('supabase-rls-help-modal');
+            openModal('publish-legacy-modal');
             return;
         }
 
         // Successfully updated existing live note!
-        const now = new Date();
-        const updateTimeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const updateTimeStr = formatUpdateTime();
         publishedInfo.updatedAt = updateTimeStr;
         publishedInfo.name = activeNoteName;
         savePublishedRecord(publishedInfo);
@@ -379,52 +426,25 @@ async function republishAsNewLink() {
     if (typeof activeNoteName === 'undefined' || !activeNoteName) return;
 
     closeModal('published-status-modal');
-    closeModal('supabase-rls-help-modal');
+    closeModal('publish-legacy-modal');
 
     // Auto-save local note if unsaved
     if (typeof saveFile === 'function' && typeof hasUnsavedChanges !== 'undefined' && hasUnsavedChanges) {
         await saveFile();
     }
 
-    const randomID = generateRandomID();
     const rawCleanContent = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : content.innerHTML;
 
     showToast('Publishing as new link...', 'info');
 
     try {
         const cleanContent = await resolvePublishedMediaInHTML(rawCleanContent);
-        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes`;
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'apikey': SUPABASE_CONFIG.anonKey,
-                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                id: randomID,
-                title: activeNoteName,
-                content: cleanContent
-            })
-        });
+        const record = await publishNewSharedNote(activeNoteName, cleanContent);
 
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Upload failed (${response.status}): ${errText}`);
-        }
-
-        const shareLink = `${SUPABASE_CONFIG.viewerBaseUrl}?id=${randomID}`;
         const linkInput = document.getElementById('published-link-input');
-        if (linkInput) linkInput.value = shareLink;
+        if (linkInput) linkInput.value = record.url;
 
-        savePublishedRecord({
-            id: randomID,
-            name: activeNoteName,
-            url: shareLink,
-            date: new Date().toLocaleDateString(),
-            updatedAt: null
-        });
+        savePublishedRecord(record);
 
         updatePublishButtonState();
         renderPublishedFilesList();
@@ -437,15 +457,6 @@ async function republishAsNewLink() {
         console.error('Error republishing note to Supabase:', err);
         showToast(`Publish error: ${err.message}`, 'error');
     }
-}
-
-// Copy Supabase RLS SQL Command
-function copySupabaseRlsSql() {
-    const codeEl = document.getElementById('supabase-rls-sql-code');
-    if (!codeEl) return;
-    navigator.clipboard.writeText(codeEl.textContent.trim()).then(() => {
-        showToast('SQL command copied to clipboard!', 'success');
-    });
 }
 
 // Execute Initial Publish to Supabase Cloud
@@ -463,7 +474,6 @@ async function executePublishNote() {
         await saveFile();
     }
 
-    const randomID = generateRandomID();
     const rawCleanContent = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : content.innerHTML;
 
     try {
@@ -475,39 +485,13 @@ async function executePublishNote() {
         if (publishConfirmBtn) {
             publishConfirmBtn.textContent = 'Publishing to Cloud...';
         }
-        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes`;
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'apikey': SUPABASE_CONFIG.anonKey,
-                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                id: randomID,
-                title: activeNoteName,
-                content: cleanContent
-            })
-        });
+        const record = await publishNewSharedNote(activeNoteName, cleanContent);
 
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Upload failed (${response.status}): ${errText}`);
-        }
-
-        const shareLink = `${SUPABASE_CONFIG.viewerBaseUrl}?id=${randomID}`;
         const linkInput = document.getElementById('published-link-input');
-        if (linkInput) linkInput.value = shareLink;
+        if (linkInput) linkInput.value = record.url;
 
-        // Store published file info in localStorage
-        savePublishedRecord({
-            id: randomID,
-            name: activeNoteName,
-            url: shareLink,
-            date: new Date().toLocaleDateString(),
-            updatedAt: null
-        });
+        // Store published file info (including its edit token) in localStorage
+        savePublishedRecord(record);
 
         updatePublishButtonState();
         renderPublishedFilesList();
@@ -653,34 +637,13 @@ async function updatePublishedFileFromList(fileId) {
         }
         noteHTML = await resolvePublishedMediaInHTML(noteHTML);
 
-        const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/shared_notes?id=eq.${encodeURIComponent(fileId)}`;
-        const response = await fetch(endpoint, {
-            method: 'PATCH',
-            headers: {
-                'apikey': SUPABASE_CONFIG.anonKey,
-                'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-                title: item.name,
-                content: noteHTML
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-        if (!Array.isArray(result) || result.length === 0) {
-            openModal('supabase-rls-help-modal');
+        const updated = await updateSharedNote(item, item.name, noteHTML);
+        if (!updated) {
+            openModal('publish-legacy-modal');
             return;
         }
 
-        const now = new Date();
-        const updateTimeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        item.updatedAt = updateTimeStr;
+        item.updatedAt = formatUpdateTime();
         localStorage.setItem('publishedFiles', JSON.stringify(list));
         renderPublishedFilesList();
         updatePublishButtonState();
