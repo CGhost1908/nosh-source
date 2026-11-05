@@ -30,7 +30,6 @@ const { ipcRenderer, shell } = require('electron');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
-const axios = require('axios');
 
 const port = 2222;
 let savesDir = '';
