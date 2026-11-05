@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, MenuItem, dialog, shell, session, webFrameMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, MenuItem, dialog, shell, session, webFrameMain, globalShortcut, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -204,6 +204,11 @@ function createWindow() {
         if (win && !win.isDestroyed()) {
             win.webContents.send('confirm-close');
         }
+    });
+
+    // The hidden Quick Capture window would otherwise keep the app alive
+    win.on('closed', () => {
+        destroyQuickCaptureWindow();
     });
 }
 
@@ -1153,6 +1158,173 @@ ipcMain.handle('close-youtube-pip', () => {
     return { success: true };
 });
 
+// Quick Capture: a global hotkey opens a small window from anywhere in the OS.
+// The snippet is forwarded to the main window, which appends it to the "Inbox"
+// note with the regular save pipeline (custom notes folder, Drive sync, sidebar).
+const QUICK_CAPTURE_SHORTCUT = 'CommandOrControl+Alt+N';
+const QUICK_CAPTURE_MAX_LENGTH = 200000;
+const QUICK_CAPTURE_TIMEOUT_MS = 8000;
+
+let quickCaptureWindow = null;
+let quickCaptureRequestSeq = 0;
+const pendingQuickCaptures = new Map();
+
+function createQuickCaptureWindow() {
+    quickCaptureWindow = new BrowserWindow({
+        width: 560,
+        height: 300,
+        show: false,
+        frame: false,
+        transparent: true,
+        resizable: false, // transparent windows can't be resized on Windows
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        fullscreenable: false,
+        icon: path.join(__dirname, 'icon.ico'),
+        title: 'Quick Note - Nosh',
+        webPreferences: {
+            preload: path.join(__dirname, 'quick-capture-preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true
+        }
+    });
+
+    quickCaptureWindow.loadFile('quick-capture.html');
+
+    // Behave like a launcher: clicking elsewhere hides it (the draft is kept)
+    quickCaptureWindow.on('blur', () => {
+        if (quickCaptureWindow && !quickCaptureWindow.isDestroyed() && quickCaptureWindow.isVisible()) {
+            quickCaptureWindow.hide();
+        }
+    });
+
+    quickCaptureWindow.on('closed', () => {
+        quickCaptureWindow = null;
+    });
+}
+
+function destroyQuickCaptureWindow() {
+    if (quickCaptureWindow && !quickCaptureWindow.isDestroyed()) {
+        quickCaptureWindow.destroy();
+    }
+    quickCaptureWindow = null;
+}
+
+function showQuickCaptureWindow() {
+    if (!quickCaptureWindow || quickCaptureWindow.isDestroyed()) {
+        createQuickCaptureWindow();
+    }
+
+    // Open on the monitor the user is working on, slightly above center
+    const cursor = screen.getCursorScreenPoint();
+    const { workArea } = screen.getDisplayNearestPoint(cursor);
+    const [width, height] = quickCaptureWindow.getSize();
+    quickCaptureWindow.setPosition(
+        Math.round(workArea.x + (workArea.width - width) / 2),
+        Math.round(workArea.y + workArea.height * 0.25)
+    );
+
+    const reveal = () => {
+        if (!quickCaptureWindow || quickCaptureWindow.isDestroyed()) return;
+        quickCaptureWindow.show();
+        quickCaptureWindow.focus();
+        quickCaptureWindow.webContents.send('quick-capture-shown');
+    };
+
+    if (quickCaptureWindow.webContents.isLoading()) {
+        quickCaptureWindow.webContents.once('did-finish-load', reveal);
+    } else {
+        reveal();
+    }
+}
+
+function toggleQuickCaptureWindow() {
+    if (quickCaptureWindow && !quickCaptureWindow.isDestroyed() && quickCaptureWindow.isVisible()) {
+        quickCaptureWindow.hide();
+    } else {
+        showQuickCaptureWindow();
+    }
+}
+
+function registerQuickCaptureShortcut() {
+    let registered = false;
+    try {
+        registered = globalShortcut.register(QUICK_CAPTURE_SHORTCUT, toggleQuickCaptureWindow);
+    } catch (err) {
+        console.error('Quick Capture shortcut registration error:', err);
+    }
+    if (!registered) {
+        // Usually another app already owns this shortcut
+        console.warn(`Quick Capture shortcut ${QUICK_CAPTURE_SHORTCUT} could not be registered.`);
+    }
+    return registered;
+}
+
+// Opened from the command palette in the main window
+ipcMain.on('quick-capture-open', (event) => {
+    if (win && !win.isDestroyed() && event.sender === win.webContents) {
+        showQuickCaptureWindow();
+    }
+});
+
+ipcMain.on('quick-capture-hide', (event) => {
+    if (quickCaptureWindow && !quickCaptureWindow.isDestroyed() && event.sender === quickCaptureWindow.webContents) {
+        quickCaptureWindow.hide();
+    }
+});
+
+ipcMain.handle('quick-capture-submit', async (event, payload) => {
+    if (!quickCaptureWindow || quickCaptureWindow.isDestroyed() || event.sender !== quickCaptureWindow.webContents) {
+        return { success: false, error: 'Unauthorized sender' };
+    }
+
+    const text = payload && typeof payload.text === 'string' ? payload.text : '';
+    const kind = payload && payload.kind === 'text' ? 'text' : 'code';
+    if (!text.trim()) {
+        return { success: false, error: 'Nothing to save yet' };
+    }
+    if (text.length > QUICK_CAPTURE_MAX_LENGTH) {
+        return { success: false, error: 'Snippet is too large for a quick note' };
+    }
+    if (!win || win.isDestroyed()) {
+        return { success: false, error: 'Nosh main window is not available' };
+    }
+
+    const requestId = ++quickCaptureRequestSeq;
+    const result = await new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            pendingQuickCaptures.delete(requestId);
+            resolve({ success: false, error: 'Nosh did not respond. Is it still loading?' });
+        }, QUICK_CAPTURE_TIMEOUT_MS);
+
+        pendingQuickCaptures.set(requestId, (res) => {
+            clearTimeout(timer);
+            resolve(res);
+        });
+
+        win.webContents.send('quick-capture-append', { requestId, text, kind });
+    });
+
+    if (result && result.success && quickCaptureWindow && !quickCaptureWindow.isDestroyed()) {
+        quickCaptureWindow.hide();
+    }
+    return result;
+});
+
+ipcMain.on('quick-capture-result', (event, response) => {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents || !response) return;
+    const done = pendingQuickCaptures.get(response.requestId);
+    if (done) {
+        pendingQuickCaptures.delete(response.requestId);
+        done({ success: Boolean(response.success), error: response.error || null });
+    }
+});
+
+app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+});
+
 // Google Drive Callback
 appServer.get('/drive-callback', async (req, res) => {
     const code = req.query.code;
@@ -1402,6 +1574,7 @@ app.whenReady().then(() => {
     });
 
     createWindow();
+    registerQuickCaptureShortcut();
 });
 
 app.on('window-all-closed', () => {

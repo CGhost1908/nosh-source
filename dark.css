@@ -2272,6 +2272,15 @@ body.is-dragging-note * {
     font-size: 11px;
 }
 
+/* Quick Capture entries in the Inbox note */
+#content .quick-capture-meta {
+    margin: 18px 0 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+}
+
 /* Interactive Checklist / Task List */
 .checklist-item {
     display: flex;
