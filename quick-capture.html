@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+    <title>Quick Note - Nosh</title>
+    <style>
+        :root {
+            --bg-app: #0d0f12;
+            --bg-surface: #181c24;
+            --bg-elevated: #202634;
+            --border-subtle: rgba(255, 255, 255, 0.07);
+            --border-medium: rgba(255, 255, 255, 0.12);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #64748b;
+            --accent: #6366f1;
+            --success: #10b981;
+            --danger: #ef4444;
+            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-code: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: transparent;
+            font-family: var(--font-ui);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .capture {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-medium);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .capture-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            -webkit-app-region: drag;
+            user-select: none;
+        }
+
+        .capture-title {
+            font-size: 13px;
+            font-weight: 600;
+            flex: 1;
+            white-space: nowrap;
+        }
+
+        .capture-title .target {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .mode-switch {
+            display: inline-flex;
+            background: var(--bg-app);
+            border: 1px solid var(--border-subtle);
+            border-radius: 7px;
+            padding: 2px;
+            -webkit-app-region: no-drag;
+        }
+
+        .mode-switch button {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font: 600 11px var(--font-ui);
+            padding: 4px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .mode-switch button[aria-pressed="true"] {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            resize: none;
+            border: none;
+            outline: none;
+            padding: 12px 14px;
+            background: var(--bg-app);
+            color: var(--text-primary);
+            font: 13px/1.55 var(--font-code);
+            tab-size: 4;
+        }
+
+        textarea.text-mode {
+            font-family: var(--font-ui);
+            font-size: 14px;
+        }
+
+        .capture-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 12px;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        kbd {
+            font-family: var(--font-ui);
+            font-size: 10px;
+            padding: 1px 5px;
+            border: 1px solid var(--border-medium);
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            color: var(--text-secondary);
+        }
+
+        #status.error { color: var(--danger); }
+        #status.success { color: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="capture">
+        <div class="capture-header">
+            <div class="capture-title">Quick note <span class="target">&rarr; Inbox</span></div>
+            <div class="mode-switch" role="group" aria-label="Capture as">
+                <button type="button" data-mode="code" aria-pressed="true">Code</button>
+                <button type="button" data-mode="text" aria-pressed="false">Text</button>
+            </div>
+        </div>
+        <textarea id="capture-input" spellcheck="false" placeholder="Paste a snippet or jot something down..."></textarea>
+        <div class="capture-footer">
+            <span id="status" role="status" aria-live="polite"></span>
+            <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> save &nbsp; <kbd>Tab</kbd> indent &nbsp; <kbd>Esc</kbd> close</span>
+        </div>
+    </div>
+    <script src="quick-capture.js"></script>
+</body>
+</html>
