@@ -132,7 +132,8 @@ async function forceExit(state) {
 
 // Console noise that is expected offline / in CI and says nothing about the app
 function relevantErrors(errors) {
-    return errors.filter(e => !/favicon|ERR_INTERNET_DISCONNECTED|youtube|googleapis\.com|Autofill|Failed to load resource/i.test(e));
+    // "Permissions policy violation" comes from the embedded YouTube player (compute-pressure etc.)
+    return errors.filter(e => !/favicon|ERR_INTERNET_DISCONNECTED|youtube|googleapis\.com|Autofill|Failed to load resource|Permissions policy violation/i.test(e));
 }
 
 module.exports = { repo, sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, relevantErrors };
