@@ -8,7 +8,9 @@
     "start": "electron .",
     "build": "electron-builder",
     "build:dir": "electron-builder --dir",
-    "test": "electron test-app.js"
+    "check": "node scripts/check-syntax.js",
+    "test:e2e": "node tests/run-e2e.js",
+    "test": "npm run check && npm run test:e2e"
   },
   "build": {
     "icon": "icon.ico",
@@ -21,6 +23,8 @@
       "!*.key",
       "!setup.iss",
       "!scratch/**",
+      "!tests/**",
+      "!scripts/**",
       "!*.md",
       "!start.bat",
       "!src/*.psd"
