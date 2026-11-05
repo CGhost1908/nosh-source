@@ -40,6 +40,7 @@ try {
 const port = 2222;
 
 const noshTray = require('./tray');
+const notesRoots = require('./notes-roots');
 
 let loadingWindow;
 let win;
@@ -94,7 +95,10 @@ if (app.isPackaged) {
 
 function initSaveFolder() {
     const defaultNoshSaves = path.join(app.getPath('appData'), 'nosh', 'Saves');
-    if (fs.existsSync(defaultNoshSaves)) {
+    if (process.env.NOSH_E2E === '1' && process.env.NOSH_E2E_SAVES) {
+        // End-to-end tests point the app at a throwaway notes folder
+        saveFolder = path.resolve(process.env.NOSH_E2E_SAVES);
+    } else if (fs.existsSync(defaultNoshSaves)) {
         saveFolder = defaultNoshSaves;
     } else {
         const roamingPath = app.getPath('userData');
@@ -110,6 +114,7 @@ function initSaveFolder() {
         }
     }
     savesDir = saveFolder;
+    notesRoots.setDefaultRoot(saveFolder); // the page may read and write inside the default folder
     return saveFolder;
 }
 
@@ -146,10 +151,12 @@ function createWindow() {
         show: false,
         backgroundColor: '#0d0f12',
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-            enableRemoteModule: true,
-            webviewTag: true,
+            // The page has no Node access: everything goes through the whitelisted bridge in preload.js
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false, // preload needs Node for the scoped file API and Google Drive
+            webviewTag: false,
             autoplayPolicy: 'no-user-gesture-required'
         }
     });
@@ -275,26 +282,61 @@ async function requestQuit() {
     win.close();
 }
 
-// Shell & Native OS helpers
-ipcMain.handle('open-external', async (event, externalUrl) => {
-    if (typeof externalUrl === 'string' && externalUrl.trim()) {
-        let url = externalUrl.trim();
-        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(url) && !url.startsWith('mailto:')) {
-            url = 'https://' + url;
-        }
-        try {
-            await shell.openExternal(url);
-            return true;
-        } catch (err) {
-            console.error('Failed to open external URL:', err);
-            return false;
-        }
+// Only the app's own windows may use the privileged handlers below
+function isFromMainWindow(event) {
+    return Boolean(win) && !win.isDestroyed() && event.sender === win.webContents;
+}
+
+// Folders the page may read and write; see notes-roots.js
+ipcMain.on('nosh:get-roots', (event) => {
+    event.returnValue = isFromMainWindow(event) ? notesRoots.allRoots() : [];
+});
+
+ipcMain.on('nosh:claim-legacy-root', (event, legacyFolder) => {
+    if (!isFromMainWindow(event)) {
+        event.returnValue = [];
+        return;
     }
-    return false;
+    notesRoots.claimLegacyRoot(legacyFolder);
+    event.returnValue = notesRoots.allRoots();
+});
+
+// Shell & Native OS helpers
+// Only web links and mail links may be handed to the OS: other schemes (file:, ms-msdt:, custom
+// protocol handlers...) can launch programs, so a note must never be able to open them.
+function toSafeExternalUrl(rawUrl) {
+    if (typeof rawUrl !== 'string' || !rawUrl.trim()) return null;
+    let candidate = rawUrl.trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(candidate)) {
+        candidate = 'https://' + candidate;
+    }
+    try {
+        const parsed = new URL(candidate);
+        return ['http:', 'https:', 'mailto:'].includes(parsed.protocol) ? parsed.href : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+ipcMain.handle('open-external', async (event, externalUrl) => {
+    const safeUrl = toSafeExternalUrl(externalUrl);
+    if (!safeUrl) {
+        console.warn('Blocked opening a non-web URL:', String(externalUrl).slice(0, 80));
+        return false;
+    }
+    try {
+        await shell.openExternal(safeUrl);
+        return true;
+    } catch (err) {
+        console.error('Failed to open external URL:', err);
+        return false;
+    }
 });
 
 ipcMain.handle('open-folder', async (event, folderPath) => {
-    const target = folderPath || saveFolder;
+    if (!isFromMainWindow(event)) return false;
+    // Opening an arbitrary path would launch it, so only notes folders qualify
+    const target = folderPath && notesRoots.isInside(folderPath) ? folderPath : saveFolder;
     if (fs.existsSync(target)) {
         await shell.openPath(target);
         return true;
@@ -302,12 +344,16 @@ ipcMain.handle('open-folder', async (event, folderPath) => {
     return false;
 });
 
-ipcMain.handle('select-folder', async () => {
+ipcMain.handle('select-folder', async (event) => {
+    if (!isFromMainWindow(event)) return null;
     const result = await dialog.showOpenDialog(win, {
         title: 'Select Notes Folder',
         properties: ['openDirectory']
     });
-    return result.filePaths[0] || null;
+    const chosen = result.filePaths[0] || null;
+    // The user picked this folder in a native dialog, so the page may use it from now on
+    if (chosen && !notesRoots.addUserChosenRoot(chosen)) return null;
+    return chosen;
 });
 
 ipcMain.handle('get-save-path', () => {
@@ -319,6 +365,12 @@ ipcMain.handle('upload-to-catbox', async (event, { filePath, base64Data, fileNam
     try {
         let fileBuffer = null;
         let finalName = fileName || 'asset.png';
+
+        // A page-supplied path may only point inside the notes folders; otherwise this would
+        // let a script upload any file on the computer
+        if (filePath && !notesRoots.isInside(filePath)) {
+            return { success: false, error: 'File is outside the notes folder' };
+        }
 
         if (filePath && fs.existsSync(filePath)) {
             fileBuffer = await fs.promises.readFile(filePath);
@@ -471,7 +523,9 @@ function escapeHtmlMain(str) {
 }
 
 ipcMain.handle('export-pdf', async (event, { defaultName, title, htmlContent, outputPath }) => {
-    let targetPath = outputPath;
+    // A page-chosen output path is only honoured inside the notes folders (it would otherwise
+    // overwrite any file); anything else falls back to the Save dialog
+    let targetPath = outputPath && notesRoots.isInside(outputPath) ? outputPath : null;
     if (!targetPath) {
         const result = await dialog.showSaveDialog(win, {
             title: 'Export PDF',
@@ -1169,8 +1223,10 @@ ipcMain.handle('open-youtube-pip', (event, { videoId, title }) => {
         backgroundColor: '#0f172a',
         title: targetTitle + ' - Nosh',
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false
+            preload: path.join(__dirname, 'pip-preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true
         }
     });
 
@@ -1183,6 +1239,15 @@ ipcMain.handle('open-youtube-pip', (event, { videoId, title }) => {
     });
 
     return { success: true };
+});
+
+// The pin button in the floating player (it used the removed `remote` module before)
+ipcMain.handle('pip-set-always-on-top', (event, pinned) => {
+    if (youtubePipWindow && !youtubePipWindow.isDestroyed() && event.sender === youtubePipWindow.webContents) {
+        youtubePipWindow.setAlwaysOnTop(Boolean(pinned));
+        return true;
+    }
+    return false;
 });
 
 ipcMain.handle('close-youtube-pip', () => {
@@ -1553,7 +1618,22 @@ app.whenReady().then(() => {
     }
 
     // Strip all YouTube native chrome, share buttons, top overlays, watermarks and title bars at root frame level
+    // No window may be navigated away from the app's own files, nor open new windows: a link in a
+    // note opens in the system browser instead of loading a website into a privileged window.
+    const appBaseUrl = url.pathToFileURL(__dirname).href.toLowerCase();
     app.on('web-contents-created', (event, contents) => {
+        contents.setWindowOpenHandler(({ url: targetUrl }) => {
+            const safeUrl = toSafeExternalUrl(targetUrl);
+            if (safeUrl && /^https?:/i.test(safeUrl)) shell.openExternal(safeUrl);
+            return { action: 'deny' };
+        });
+        contents.on('will-navigate', (navEvent, targetUrl) => {
+            if (typeof targetUrl === 'string' && targetUrl.toLowerCase().startsWith(appBaseUrl)) return;
+            navEvent.preventDefault();
+            const safeUrl = toSafeExternalUrl(targetUrl);
+            if (safeUrl && /^https?:/i.test(safeUrl)) shell.openExternal(safeUrl);
+        });
+
         contents.on('did-frame-finish-load', (frameEvent, isMainFrame, frameProcessId, frameRoutingId) => {
             if (webFrameMain) {
                 const frame = webFrameMain.fromId(frameProcessId, frameRoutingId);
@@ -1609,6 +1689,7 @@ app.whenReady().then(() => {
         });
     });
 
+    notesRoots.load();
     noshTray.loadPrefs();
     createWindow();
     const shortcutRegistered = registerQuickCaptureShortcut();

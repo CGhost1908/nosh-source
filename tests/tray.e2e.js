@@ -39,7 +39,7 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit } =
         check('keep-running is on by default', info.keepChecked && info.prefs.keepInTray === true, info.prefs);
 
         // Closing the window (what the title-bar X sends) hides it instead of exiting
-        await s.main.evaluate(() => require('electron').ipcRenderer.send('close'));
+        await s.main.evaluate(() => ipcRenderer.send('close'));
         await waitFor(async () => !(await s.mainWindow()).visible, 10000, 'window hidden');
         const hidden = await s.mainWindow();
         check('closing the window hides it to the tray', hidden.exists && !hidden.visible && !s.closed, hidden);
@@ -47,7 +47,7 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit } =
         check('the first-close hint is remembered', fs.existsSync(prefsFile) && readPrefs().trayHintShown === true);
 
         // Quick Capture still saves while the main window is hidden
-        await s.main.evaluate(() => require('electron').ipcRenderer.send('quick-capture-open'));
+        await s.main.evaluate(() => ipcRenderer.send('quick-capture-open'));
         let cap = null;
         await waitFor(() => (cap = s.app.windows().find(p => p.url().includes('quick-capture.html'))), 15000, 'capture window');
         await cap.waitForSelector('#capture-input');
@@ -70,7 +70,7 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit } =
         check('the menu checkbox reflects the new setting', (await trayOp(s, 'info')).keepChecked === false);
 
         // With it off, closing really exits
-        await s.main.evaluate(() => require('electron').ipcRenderer.send('close'));
+        await s.main.evaluate(() => ipcRenderer.send('close'));
         await waitFor(() => s.closed, 15000, 'app exit');
         check('with keep-running off, closing the window quits the app', s.closed);
 
@@ -101,7 +101,7 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit } =
         check('cancelling keeps the app running and the window visible', !s.closed && (await s.mainWindow()).visible);
 
         // A cancelled quit must not leave a stale quit flag: a normal close still hides
-        await s.main.evaluate(() => require('electron').ipcRenderer.send('close'));
+        await s.main.evaluate(() => ipcRenderer.send('close'));
         await waitFor(() => s.main.evaluate(() => document.getElementById('unsaved-modal').classList.contains('active')), 10000, 'prompt again');
         await s.main.click('#unsaved-discard-btn');
         await waitFor(async () => !(await s.mainWindow()).visible, 10000, 'hidden after discard');

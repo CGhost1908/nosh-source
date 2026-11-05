@@ -1,72 +1,13 @@
-// CodeMirror Core & Addons
-const CodeMirror = require('codemirror');
-require('codemirror/lib/codemirror');
-require('codemirror/addon/edit/closebrackets');
-require('codemirror/addon/hint/show-hint');
-require('codemirror/keymap/sublime.js');
-
-// CodeMirror Modes
-require('codemirror/mode/clike/clike');
-require('codemirror/mode/javascript/javascript');
-require('codemirror/addon/hint/javascript-hint');
-require('codemirror/mode/htmlmixed/htmlmixed');
-require('codemirror/mode/xml/xml');
-require('codemirror/addon/hint/html-hint');
-require('codemirror/mode/css/css');
-require('codemirror/addon/hint/css-hint');
-require('codemirror/mode/python/python');
-require('codemirror/mode/php/php');
-require('codemirror/mode/ruby/ruby');
-require('codemirror/mode/go/go');
-require('codemirror/mode/sql/sql');
-require('codemirror/mode/shell/shell');
-require('codemirror/mode/markdown/markdown');
-require('codemirror/mode/yaml/yaml');
-require('codemirror/mode/rust/rust');
-require('codemirror/mode/swift/swift');
-
-// Node.js & Electron modules
-const { ipcRenderer, shell } = require('electron');
-const fs = require('fs');
-const fsPromises = fs.promises;
-const path = require('path');
+// Core renderer state.
+//
+// This window runs with contextIsolation and no Node integration. CodeMirror is loaded with
+// <script> tags in index.html, and ipcRenderer / fs / fsPromises / path / shell come from
+// renderer-bridge.js (built on the preload bridge), which loads before this file.
 
 const port = 2222;
 let savesDir = '';
 let activeNoteName = null;
 let hasUnsavedChanges = false;
-
-// Load local environment variables from .env if present (git-ignored)
-try {
-    const envPath = path.join(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
-        const content = fs.readFileSync(envPath, 'utf8');
-        for (const line of content.split(/\r?\n/)) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#')) continue;
-            const eqIdx = trimmed.indexOf('=');
-            if (eqIdx > 0) {
-                const key = trimmed.slice(0, eqIdx).trim();
-                let val = trimmed.slice(eqIdx + 1).trim();
-                if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-                    val = val.slice(1, -1);
-                }
-                if (!process.env[key]) {
-                    process.env[key] = val;
-                }
-            }
-        }
-    }
-} catch (e) {
-    console.error('Error loading .env in renderer process:', e);
-}
-
-const defaultDriveClientId = process.env.GOOGLE_DRIVE_CLIENT_ID || '';
-const defaultDriveClientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || '';
-if (typeof window !== 'undefined') {
-    window.defaultDriveClientId = defaultDriveClientId;
-    window.defaultDriveClientSecret = defaultDriveClientSecret;
-}
 
 // Helper to find a sidebar note element by name safely
 function findNoteElement(name) {

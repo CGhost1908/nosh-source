@@ -18,7 +18,7 @@
 
     const getClipboard = () => {
         try {
-            return require('electron').clipboard;
+            return nativeClipboard;
         } catch {
             return {
                 writeText: (t) => navigator.clipboard && navigator.clipboard.writeText(t),
@@ -196,7 +196,7 @@
                 url = 'https://' + url;
             }
             try {
-                require('electron').shell.openExternal(url);
+                shell.openExternal(url);
             } catch {
                 window.open(url, '_blank');
             }
