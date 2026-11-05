@@ -1253,29 +1253,20 @@
         </div>
     </div>
 
-    <!-- 6c. Supabase RLS Permission Help Modal -->
-    <div class="modal-container" id="supabase-rls-help-modal" style="width: 520px;">
+    <!-- 6c. Legacy Link Cannot Be Updated Modal -->
+    <div class="modal-container" id="publish-legacy-modal" style="width: 520px;">
         <div class="modal-header">
             <h3 style="color: var(--warning); display: flex; align-items: center; gap: 6px;">
-                <iconify-icon icon="solar:shield-warning-bold"></iconify-icon> Supabase Permission Setup
+                <iconify-icon icon="solar:shield-warning-bold"></iconify-icon> This link can't be updated
             </h3>
             <button class="modal-close-btn" onclick="closeAllModals()"><iconify-icon icon="solar:close-circle-linear"></iconify-icon></button>
         </div>
         <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
             <p style="font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.5;">
-                In-place update requires an <strong>UPDATE</strong> policy in your Supabase project. To update existing live notes under the same link, run this query once in your <strong>Supabase Dashboard &gt; SQL Editor</strong>:
+                Live notes can only be updated from the device that published them. This link was published from another device or by an older version of Nosh, so it has no edit key here.
             </p>
-            <div style="position: relative;">
-                <pre id="supabase-rls-sql-code" style="background: var(--bg-app); border: 1px solid var(--border-medium); border-radius: var(--radius-xs); padding: 10px; font-family: var(--font-code); font-size: 11px; color: #a5f3fc; overflow-x: auto; white-space: pre-wrap; margin: 0;">CREATE POLICY "Allow anon update" ON public.shared_notes FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
-GRANT UPDATE ON public.shared_notes TO anon, authenticated;</pre>
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn-secondary btn-sm" onclick="copySupabaseRlsSql()" style="gap: 4px;">
-                    <iconify-icon icon="solar:copy-linear"></iconify-icon> Copy SQL Command
-                </button>
-            </div>
             <div style="font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 10px;">
-                Don't want to configure SQL right now? You can immediately publish as a fresh link instead:
+                You can publish the latest version as a new link instead:
             </div>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between;">
