@@ -353,9 +353,9 @@ function insertCodeBlockFromSelection() {
 }
 
 // Create Code Block (with optional initial code content)
-function createCodeBlock(mode, label = null, initialContent = '') {
-    closeAllModals();
-
+// Build a detached code block element (header + textarea) without inserting it.
+// Shared by the editor's "insert code block" flow and Quick Capture.
+function buildCodeBlockElement(mode, label = null, initialContent = '') {
     const langMeta = getLanguageMeta(mode, label);
     const displayLabel = label || langMeta.name || mode.replace('text/x-', '').replace('src', '');
     const wrapper = document.createElement('div');
@@ -410,6 +410,13 @@ function createCodeBlock(mode, label = null, initialContent = '') {
 
     wrapper.appendChild(header);
     wrapper.appendChild(textarea);
+    return wrapper;
+}
+
+function createCodeBlock(mode, label = null, initialContent = '') {
+    closeAllModals();
+
+    const wrapper = buildCodeBlockElement(mode, label, initialContent);
 
     // Insert at caret if user was editing inside #content
     if (savedCodeBlockRange && content && content.contains(savedCodeBlockRange.startContainer)) {
