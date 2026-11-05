@@ -49,7 +49,7 @@ async function loadVaultFolders(availableFiles = []) {
     if (typeof savesDir !== 'undefined' && savesDir && fs.existsSync(savesDir)) {
         try {
             const dirents = await fsPromises.readdir(savesDir, { withFileTypes: true });
-            const ignoredDirs = new Set(['.trash', 'assets', '.git', 'node_modules', '.temp']);
+            const ignoredDirs = new Set(['.trash', '.history', 'assets', '.git', 'node_modules', '.temp']);
 
             for (const dirent of dirents) {
                 if (dirent.isDirectory() && !ignoredDirs.has(dirent.name)) {
