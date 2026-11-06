@@ -118,31 +118,389 @@ async function deleteNoteHistory(noteName) {
     }
 }
 
-// Turn saved note HTML into inert plain text for the preview (nothing is ever executed or rendered)
-function historyHtmlToText(html) {
+// ---------- Snapshot rendering & GitHub-style diff ----------
+
+// Sanitize saved note HTML into an inert document: scripts, live editors, toolbars
+// and scriptable attributes are stripped, and nothing saved is ever executed.
+function sanitizeSnapshotDoc(html) {
     const doc = new DOMParser().parseFromString(html || '', 'text/html');
-    doc.querySelectorAll('.CodeMirror, .media-toolbar, .media-resize-handle, script, style').forEach(el => el.remove());
+    doc.querySelectorAll('script, style, link, meta, iframe[srcdoc], .CodeMirror, .media-toolbar, .media-resize-handle').forEach(el => el.remove());
 
-    doc.querySelectorAll('textarea.code').forEach(ta => {
-        ta.replaceWith(doc.createTextNode(`\n\`\`\`\n${ta.value || ta.textContent || ''}\n\`\`\`\n`));
+    doc.querySelectorAll('*').forEach(el => {
+        for (const attr of [...el.attributes || []]) {
+            const name = (attr.name || '').toLowerCase();
+            if (name.startsWith('on') || name === 'draggable' || name === 'contenteditable') el.removeAttribute(attr.name);
+        }
     });
+
     doc.querySelectorAll('input.checklist-checkbox').forEach(cb => {
-        cb.replaceWith(doc.createTextNode(cb.hasAttribute('checked') ? '[x] ' : '[ ] '));
+        cb.setAttribute('disabled', '');
+        cb.setAttribute('tabindex', '-1');
     });
+    doc.querySelectorAll('a').forEach(a => a.removeAttribute('href')); // nothing clickable in the preview
+
     doc.querySelectorAll('img, video').forEach(el => {
-        el.replaceWith(doc.createTextNode(`[${el.tagName.toLowerCase()}]`));
-    });
-    doc.querySelectorAll('br').forEach(br => br.replaceWith(doc.createTextNode('\n')));
-    doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, pre, tr, blockquote').forEach(el => {
-        el.append(doc.createTextNode('\n'));
+        const rel = el.getAttribute('data-asset-rel') ||
+            (((el.getAttribute('src') || '').startsWith('assets/')) ? el.getAttribute('src') : null);
+        if (rel) {
+            try {
+                const localUrl = toLocalMediaUrl(path.join(savesDir, rel));
+                if (localUrl) el.setAttribute('src', localUrl);
+                /* toLocalMediaUrl döndürmediyse orijinal src zaten el'de kalır */
+            } catch (err) { /* savesDir/toLocalMediaUrl hazır değil: orijinal src korunur */ }
+        }
+        el.removeAttribute('controls');
+        el.removeAttribute('autoplay');
     });
 
-    return (doc.body.textContent || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    return doc;
+}
+
+// Render the selected version itself, rather than a transformed diff, so its
+// layout matches the note while all saved content remains inert.
+function buildHistoryRenderedPreview(container, html, currentHtml = null) {
+    const doc = sanitizeSnapshotDoc(html);
+    const snapshotLines = snapshotToLines(doc);
+    const currentLines = currentHtml ? snapshotToLines(currentHtml) : [];
+    const diffOps = buildLineDiff(currentLines, snapshotLines);
+
+    doc.querySelectorAll('.code-block-wrapper').forEach(wrapper => {
+        wrapper.setAttribute('contenteditable', 'false');
+        wrapper.querySelectorAll('.block-drag-handle, .code-block-actions').forEach(el => el.remove());
+        const tag = wrapper.querySelector('.code-lang-tag');
+        if (tag) {
+            tag.classList.remove('clickable');
+            tag.removeAttribute('title');
+        }
+    });
+    doc.querySelectorAll('textarea.code').forEach(ta => {
+        const pre = doc.createElement('pre');
+        pre.className = 'history-text-code';
+        pre.textContent = ta.value || ta.textContent || '';
+        ta.replaceWith(pre);
+    });
+    doc.querySelectorAll('.checklist-text').forEach(el => el.setAttribute('contenteditable', 'false'));
+
+    const rendered = document.createElement('div');
+    rendered.className = 'history-rendered';
+    rendered.setAttribute('contenteditable', 'false');
+    while (doc.body.firstChild) rendered.appendChild(doc.body.firstChild);
+
+    container.innerHTML = '';
+    container.appendChild(rendered);
+
+    diffOps.forEach((op, index) => {
+        if (op.type === 'add' && op.line.source?.isConnected) {
+            op.line.source.classList.add('history-change-add');
+        }
+        if (op.type !== 'del') return;
+        const removed = document.createElement('div');
+        removed.className = 'history-change-remove';
+        removed.innerHTML = op.line.html || escapeHtml(op.line.sig);
+        const nextSnapshotOp = diffOps.slice(index + 1).find(candidate => candidate.type !== 'del' && candidate.line.source?.isConnected);
+        if (nextSnapshotOp) nextSnapshotOp.line.source.before(removed);
+        else rendered.appendChild(removed);
+    });
 }
 
 function countWords(text) {
     const trimmed = (text || '').trim();
     return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+// Flatten a snapshot into numbered preview LINES with real content:
+// one line per paragraph / heading / list item / checklist item / code line / media.
+// Each line keeps `sig` (plain text, used for the LCS diff) plus the inert HTML
+// (`html`) that renders it, so checkbox items, images and code show up for real.
+function snapshotToLines(html) {
+    const doc = html && html.nodeType === Node.DOCUMENT_NODE ? html : sanitizeSnapshotDoc(html);
+    const lines = [];
+
+    const pushInline = (el, opts = {}) => {
+        const sig = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!sig) return; // skip blank visual rows (e.g. `<p><br></p>`)
+        lines.push({
+            sig,
+            kind: opts.kind || el.tagName.toLowerCase(),
+            html: (opts.html !== undefined ? opts.html : el.innerHTML).trim(),
+            source: el
+        });
+    };
+
+    const walk = children => {
+        for (const el of Array.from(children)) {
+            if (el.nodeType === Node.TEXT_NODE) {
+                const sig = (el.nodeValue || '').replace(/\s+/g, ' ').trim();
+                if (sig) lines.push({ sig, kind: 'text', html: escapeHtml(sig) });
+                continue;
+            }
+            if (el.nodeType !== Node.ELEMENT_NODE) continue;
+
+            // Code block: render as a full pre/code block (single diff row)
+            if (el.classList.contains('code-block-wrapper')) {
+                const ta = el.querySelector('textarea.code');
+                const code = (ta ? (ta.value || ta.textContent || '') : '').trim();
+                const lang = ta ? (ta.getAttribute('data-label') || ta.getAttribute('language') || '') : '';
+                const sig = code.split('\n')[0] || '(code block)';
+                const pre = document.createElement('pre');
+                const codeEl = document.createElement('code');
+                if (lang) codeEl.className = `language-${lang}`;
+                codeEl.textContent = code;
+                pre.appendChild(codeEl);
+                lines.push({ sig, kind: 'codeblock', html: pre.outerHTML, source: el });
+                continue;
+            }
+            // Lone textarea.code (not inside wrapper): render as code block
+            if (el.matches && el.matches('textarea.code')) {
+                const code = (el.value || el.textContent || '').trim();
+                const lang = el.getAttribute('data-label') || el.getAttribute('language') || '';
+                const sig = code.split('\n')[0] || '(code block)';
+                const pre = document.createElement('pre');
+                const codeEl = document.createElement('code');
+                if (lang) codeEl.className = `language-${lang}`;
+                codeEl.textContent = code;
+                pre.appendChild(codeEl);
+                lines.push({ sig, kind: 'codeblock', html: pre.outerHTML, source: el });
+                continue;
+            }
+
+            // Checklist item: real checkbox (rendered downstream) + label markup
+            if (el.matches && el.matches('.checklist-item, label.checklist-item')) {
+                const cb = el.querySelector('input.checklist-checkbox');
+                const on = !!(cb && cb.hasAttribute('checked'));
+                const sig = `${on ? '[x]' : '[ ]'} ${(el.textContent || '').replace(/\s+/g, ' ').trim()}`;
+                if (sig.trim() !== (on ? '[x]' : '[ ]')) {
+                    const label = cb && cb.nextElementSibling ? cb.nextElementSibling : null;
+                    lines.push({ sig, kind: 'check', html: (label ? label.innerHTML : el.querySelector('span.checklist-text') ? el.querySelector('span.checklist-text').innerHTML : el.innerHTML).trim(), source: el });
+                }
+                continue;
+            }
+
+            // Top-level checkbox without a wrapper (kept in place for the diff)
+            if (el.matches && el.matches('input.checklist-checkbox')) {
+                const on = el.hasAttribute('checked');
+                lines.push({ sig: on ? '[x]' : '[ ]', kind: 'check', html: '', source: el });
+                continue;
+            }
+
+            // Media: an inline thumbnail image (or a compact video box)
+            if (el.matches && el.matches('img, video')) {
+                if (el.getAttribute('src')) {
+                    lines.push({ sig: `[${el.tagName.toLowerCase()}]`, kind: 'media', html: '' });
+                    lines[lines.length - 1].el = el;
+                    lines[lines.length - 1].source = el;
+                }
+                continue;
+            }
+
+            if (el.matches && el.matches('hr')) {
+                lines.push({ sig: '-', kind: 'rule', html: '', source: el });
+                continue;
+            }
+
+            // Standalone <pre> (from markdown export etc.): render as code block
+            if (el.tagName === 'PRE') {
+                const code = (el.textContent || '').trim();
+                const sig = code.split('\n')[0] || '(code block)';
+                const clone = el.cloneNode(true);
+                clone.querySelectorAll('*').forEach(c => {
+                    for (const attr of [...c.attributes || []]) {
+                        const n = attr.name.toLowerCase();
+                        if (n.startsWith('on') || n === 'contenteditable') c.removeAttribute(attr.name);
+                    }
+                });
+                lines.push({ sig, kind: 'codeblock', html: clone.outerHTML, source: el });
+                continue;
+            }
+
+            if (el.tagName === 'UL' || el.tagName === 'OL') {
+                walk(el.children);
+                continue;
+            }
+            if (el.tagName === 'LI') {
+                pushInline(el);
+                continue;
+            }
+            // Table: render as a real table (one diff row for the whole table)
+            if (el.tagName === 'TABLE') {
+                const clone = el.cloneNode(true);
+                clone.querySelectorAll('*').forEach(c => {
+                    for (const attr of [...c.attributes || []]) {
+                        const n = attr.name.toLowerCase();
+                        if (n.startsWith('on') || n === 'contenteditable') c.removeAttribute(attr.name);
+                    }
+                });
+                const sig = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                lines.push({ sig, kind: 'table', html: clone.outerHTML, source: el });
+                continue;
+            }
+
+            // Headings and paragraphs: real text with its inline formatting (bold, code, ...)
+            if (/^H[1-6]$/.test(el.tagName)) {
+                const sig = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                if (sig) lines.push({ sig, kind: 'heading', tag: el.tagName.toLowerCase(), html: el.innerHTML.trim(), source: el });
+                continue;
+            }
+            if (el.tagName === 'P' || el.tagName === 'BLOCKQUOTE') {
+                pushInline(el);
+                continue;
+            }
+
+            // Unknown container (div, section, ...): walk into it
+            if (el.children && el.children.length) {
+                walk(el.children);
+            } else {
+                pushInline(el);
+            }
+        }
+    };
+
+    walk(doc.body.childNodes);
+    return lines;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Diff matches lines by their plain-text signature; a restored version ADDS green
+// lines to the note and REMOVES red ones (base = current note, candidate = snapshot).
+function buildLineDiff(baseLines, snapshotLines) {
+    const a = baseLines.map(l => l.sig);
+    const b = snapshotLines.map(l => l.sig);
+
+    // Guard rails: LCS matrix is O(n*m) - fall back to a coarse diff for huge notes
+    if (a.length * b.length > 1_500_000) {
+        const ops = [];
+        baseLines.forEach(line => ops.push({ type: 'del', line }));
+        snapshotLines.forEach(line => ops.push({ type: 'add', line }));
+        return ops;
+    }
+
+    const n = a.length, m = b.length;
+    const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+        for (let j = m - 1; j >= 0; j--) {
+            dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
+    }
+
+    const ops = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+        if (a[i] === b[j]) { ops.push({ type: 'ctx', line: baseLines[i] }); i++; j++; }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: 'del', line: baseLines[i] }); i++; }
+        else { ops.push({ type: 'add', line: snapshotLines[j] }); j++; }
+    }
+    while (i < n) { ops.push({ type: 'del', line: baseLines[i] }); i++; }
+    while (j < m) { ops.push({ type: 'add', line: snapshotLines[j] }); j++; }
+    return ops;
+}
+
+// One row of the diff: kind decides how the real content is rendered
+function fillDiffLineContent(row, line) {
+    const slot = row.querySelector('.diff-text');
+    if (!slot) return;
+    switch (line.kind) {
+        case 'code': {
+            slot.classList.add('code');
+            slot.textContent = line.sig;
+            break;
+        }
+        case 'heading': {
+            const h = document.createElement(line.tag || 'h3');
+            h.innerHTML = line.html;
+            slot.appendChild(h);
+            break;
+        }
+        case 'check': {
+            slot.classList.add('check');
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.className = 'checklist-checkbox';
+            box.setAttribute('disabled', '');
+            box.setAttribute('tabindex', '-1');
+            if (line.sig.startsWith('[x]')) box.setAttribute('checked', '');
+            slot.appendChild(box);
+            const label = document.createElement('span');
+            label.className = 'checklist-text';
+            label.innerHTML = line.html;
+            slot.appendChild(label);
+            break;
+        }
+        case 'media': {
+            slot.classList.add('media');
+            if (line.el && line.el.getAttribute('src')) {
+                const img = line.el.cloneNode(true);
+                img.removeAttribute('controls');
+                slot.appendChild(img);
+            }
+            break;
+        }
+        case 'table': {
+            slot.classList.add('table');
+            slot.style.display = 'block';
+            slot.innerHTML = line.html;
+            break;
+        }
+        case 'codeblock': {
+            slot.classList.add('codeblock');
+            slot.style.display = 'block';
+            slot.innerHTML = line.html;
+            break;
+        }
+        case 'p':
+        case 'blockquote': {
+            const block = document.createElement(line.kind);
+            block.innerHTML = line.html;
+            slot.appendChild(block);
+            break;
+        }
+        case 'li': {
+            const item = document.createElement('div');
+            item.className = 'history-diff-list-item';
+            item.innerHTML = line.html;
+            slot.appendChild(item);
+            break;
+        }
+        default: {
+            // Text with inline formatting (bold, italic, code, links) from the note
+            slot.innerHTML = line.html || escapeHtml(line.sig);
+        }
+    }
+}
+
+// GitHub-style unified diff: the whole file in one flow, changes highlighted in place.
+// Green lines = added by the candidate snapshot, red lines = removed relative to the current note.
+function renderHistoryDiff(container, baseLines, snapshotLines) {
+    const ops = buildLineDiff(baseLines, snapshotLines);
+    const added = ops.filter(o => o.type === 'add').length;
+    const removed = ops.filter(o => o.type === 'del').length;
+
+    const flow = document.createElement('div');
+    flow.className = 'history-diff';
+    flow.dataset.added = added;
+    flow.dataset.removed = removed;
+
+    ops.forEach(op => {
+        const row = document.createElement('div');
+        row.className = `diff-line ${op.type === 'add' ? 'add' : op.type === 'del' ? 'del' : 'ctx'}`;
+        if (op.line && op.line.kind) row.dataset.kind = op.line.kind;
+
+        const symbol = document.createElement('span');
+        symbol.className = 'diff-symbol';
+        symbol.textContent = op.type === 'add' ? '+' : op.type === 'del' ? '−' : ' ';
+
+        const text = document.createElement('div');
+        text.className = 'diff-text';
+        row.append(symbol, text);
+        if (op.line) fillDiffLineContent(row, op.line);
+        flow.appendChild(row);
+    });
+    container.appendChild(flow);
+    return flow;
 }
 
 // Restore a snapshot as the current content of the note.
@@ -168,7 +526,7 @@ async function restoreNoteSnapshot(noteName, id) {
     if (typeof unsavedDot !== 'undefined' && unsavedDot) unsavedDot.classList.remove('active');
 
     if (typeof invalidateVaultDashboardCache === 'function') invalidateVaultDashboardCache();
-    await readDatabase(safeName);
+    await readDatabase(safeName, true);
 
     const item = typeof findNoteElement === 'function' ? findNoteElement(safeName) : null;
     if (item && item.classList.contains('drive-save') && typeof uploadFileToDrive === 'function') {
@@ -180,6 +538,8 @@ async function restoreNoteSnapshot(noteName, id) {
 
 let historyPanelNote = null;
 let historyPanelSelectedId = null;
+let historyPanelSnapshotHtml = null;
+let historyPanelCurrentHtml = null;
 
 function historyTimeLabel(timestamp) {
     return typeof formatRelativeTime === 'function'
@@ -194,12 +554,24 @@ async function openNoteHistory() {
     }
     historyPanelNote = activeNoteName;
     historyPanelSelectedId = null;
+    historyPanelSnapshotHtml = null;
+    historyPanelCurrentHtml = null;
 
     const title = document.getElementById('history-note-name');
     if (title) title.textContent = historyPanelNote;
 
     await renderHistoryList();
     openModal('history-modal');
+}
+
+function renderHistoryPreview() {
+    const preview = document.getElementById('history-preview');
+    const stats = document.getElementById('history-preview-stats');
+    if (!preview || historyPanelSnapshotHtml === null) return;
+
+    const snapshotLines = snapshotToLines(historyPanelSnapshotHtml);
+    buildHistoryRenderedPreview(preview, historyPanelSnapshotHtml, historyPanelCurrentHtml);
+    if (stats) stats.textContent = `${countWords(snapshotLines.map(l => l.sig).join('\n'))} words in this version`;
 }
 
 async function renderHistoryList() {
@@ -260,14 +632,20 @@ async function selectHistoryEntry(id) {
     try {
         const html = await readNoteSnapshot(historyPanelNote, id);
         if (historyPanelSelectedId !== id) return; // user clicked another version meanwhile
-        const text = historyHtmlToText(html);
-        preview.textContent = text || '(empty note)';
-        if (stats) {
-            const currentWords = content ? countWords(content.innerText) : 0;
-            stats.textContent = `${countWords(text)} words in this version · ${currentWords} in the current note`;
-        }
+
+        // Render the selected snapshot as it was written.
+        historyPanelSnapshotHtml = html;
+        historyPanelCurrentHtml = null;
+        try {
+            historyPanelCurrentHtml = await fsPromises.readFile(path.join(savesDir, `${path.basename(historyPanelNote)}.nsh`), 'utf8');
+        } catch (err) { /* note may not exist on disk yet */ }
+        if (historyPanelSelectedId !== id) return;
+        renderHistoryPreview();
     } catch (err) {
-        preview.textContent = 'Could not read this version.';
+        preview.innerHTML = '';
+        const em = document.createElement('em');
+        em.textContent = 'Could not read this version.';
+        preview.appendChild(em);
         if (stats) stats.textContent = '';
     }
 }

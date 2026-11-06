@@ -30,7 +30,7 @@ function notifyAppReady() {
 }
 
 // Read database and populate sidebar notes
-async function readDatabase(fileToSelect) {
+async function readDatabase(fileToSelect, forceSelect = false) {
     if (typeof showSidebarSkeleton === 'function') {
         showSidebarSkeleton();
     }
@@ -81,7 +81,7 @@ async function readDatabase(fileToSelect) {
 
         // If fileToSelect is specified, open it
         if (fileToSelect && nshFiles.includes(`${fileToSelect}.nsh`)) {
-            await openDesiredFile(fileToSelect);
+            await openDesiredFile(fileToSelect, false, forceSelect);
         } else if (activeNoteName && nshFiles.includes(`${activeNoteName}.nsh`)) {
             // Keep active note selected
             const activeEl = document.querySelector(`.save[data-file="${activeNoteName}"]`);
@@ -656,17 +656,27 @@ async function showWelcomeDashboard() {
 }
 
 // Open Note File
-async function openDesiredFile(noteName, bypassUnsavedCheck = false) {
+async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload = false) {
     if (!noteName) return;
 
-    if (!bypassUnsavedCheck && hasUnsavedChanges && activeNoteName && activeNoteName !== noteName) {
+    const safeName = path.basename(noteName);
+
+    // The note is already open in the editor: keep its current state (draft included),
+    // don't reload and don't prompt - reopening the active note is a no-op
+    if (!forceReload && activeNoteName === safeName) {
+        const activeItem = typeof findNoteElement === 'function' ? findNoteElement(safeName) : null;
+        if (activeItem) activeItem.classList.add('active');
+        return;
+    }
+
+    // Switching to a different note while this one has unsaved changes: ask first
+    if (!bypassUnsavedCheck && hasUnsavedChanges && activeNoteName) {
         promptUnsavedChanges(() => {
             openDesiredFile(noteName, true);
         });
         return;
     }
 
-    const safeName = path.basename(noteName);
     const filePath = path.join(savesDir, `${safeName}.nsh`);
 
     try {
@@ -865,7 +875,7 @@ async function restoreFromTrash(noteName) {
             await fsPromises.rename(trashPath, restorePath);
             showToast(`Restored "${safeName}"`, 'success');
             invalidateVaultDashboardCache();
-            await readDatabase(safeName);
+            await readDatabase(safeName, true);
             return true;
         }
     } catch (err) {

@@ -62,6 +62,42 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
         await main.evaluate(async () => { hasUnsavedChanges = true; await saveFile(); });
         check('saving unchanged content adds nothing', snaps().length === beforeNoop);
 
+        // No reload: clicking the already-open note must not reset the editor
+        const preReload = await main.evaluate(() => {
+            const marker = document.createElement('p');
+            marker.id = 'no-reopen-marker';
+            marker.textContent = 'still-open';
+            content.appendChild(marker);
+            content.scrollTop = 5; // touch state
+            return true;
+        });
+        await main.click('.save[data-file="Doc"]');
+        await sleep(500);
+        const postReload = await main.evaluate(() => ({
+            marker: !!document.getElementById('no-reopen-marker'),
+            active: activeNoteName
+        }));
+        check('clicking the open note again does not reload the editor', preReload && postReload.marker && postReload.active === 'Doc', postReload);
+
+        // Reopening with unsaved changes must stay silent (no Save/Discard prompt)
+        await main.evaluate(() => {
+            const p = document.createElement('p');
+            p.id = 'draft-marker';
+            p.textContent = 'draft';
+            content.appendChild(p);
+            hasUnsavedChanges = true;
+        });
+        await main.click('.save[data-file="Doc"]');
+        await sleep(500);
+        const draftCheck = await main.evaluate(() => ({
+            marker: !!document.getElementById('draft-marker'),
+            popup: document.getElementById('unsaved-modal')?.classList.contains('active'),
+            unsaved: hasUnsavedChanges,
+            active: activeNoteName
+        }));
+        check('reopening the open note with a draft stays silent (no prompt, no reload)',
+            draftCheck.marker && !draftCheck.popup && draftCheck.unsaved && draftCheck.active === 'Doc', draftCheck);
+
         // .history must not leak into the sidebar as a folder
         await main.evaluate(() => readDatabase('Doc'));
         await sleep(600);
@@ -85,11 +121,30 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
         check('the panel shows the note name, selects the newest, enables restore',
             panel.name === 'Doc' && panel.selected === snaps()[1].replace('.nsh', '') && !panel.restoreDisabled, panel);
 
-        // Oldest version: inert preview text
+        // Oldest version: the snapshot uses the note's own read-only layout.
         await main.click('#history-list .history-item:last-child');
         await sleep(300);
-        const preview = await main.evaluate(() => document.getElementById('history-preview').textContent);
-        check('preview shows text, checklist state and fenced code', preview.includes('version one') && preview.includes('[x]') && preview.includes('```\nprint(1)\n```'), preview);
+        const preview = await main.evaluate(() => {
+            const el = document.getElementById('history-preview');
+            return {
+                text: el.textContent,
+                rendered: !!el.querySelector('.history-rendered'),
+                heading: el.querySelector('.history-rendered h1')?.textContent === 'Doc',
+                checkbox: !!el.querySelector('.history-rendered .checklist-checkbox'),
+                checked: !!(el.querySelector('.history-rendered .checklist-checkbox') || {}).checked || el.querySelector('.history-rendered .checklist-checkbox')?.hasAttribute('checked'),
+                code: el.querySelector('.history-rendered .history-text-code')?.textContent === 'print(1)',
+                hasDiff: !!el.querySelector('.history-diff'),
+                added: el.querySelectorAll('.history-rendered .history-change-add').length,
+                removed: el.querySelectorAll('.history-rendered .history-change-remove').length,
+                addPrefix: getComputedStyle(el.querySelector('.history-change-add'), '::before').content,
+                removePrefix: getComputedStyle(el.querySelector('.history-change-remove'), '::before').content,
+                radius: getComputedStyle(el.querySelector('.history-change-add')).borderRadius,
+                shadow: getComputedStyle(el.querySelector('.history-change-add')).boxShadow,
+                zoom: getComputedStyle(el.querySelector('.history-rendered')).zoom
+            };
+        });
+        check('preview keeps the saved note layout and highlights additions and removals',
+            preview.rendered && preview.heading && preview.checkbox && preview.checked && preview.code && !preview.hasDiff && preview.added > 0 && preview.removed > 0 && preview.addPrefix === '"+"' && preview.removePrefix === '"−"' && preview.radius === '0px' && preview.shadow === 'none' && preview.zoom === '0.85', preview);
 
         // Restore through the UI
         const beforeRestore = snaps().length;
@@ -110,10 +165,11 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
         await sleep(500);
         const inert = await main.evaluate(() => ({
             pwned: window.__pwned,
-            imgInPreview: !!document.querySelector('#history-preview img, #history-list img'),
+            scriptInPreview: !!document.querySelector('#history-preview script, #history-preview .CodeMirror'),
             text: document.getElementById('history-preview').textContent
         }));
-        check('malicious snapshot HTML is not rendered or executed', inert.pwned === 0 && !inert.imgInPreview && inert.text.includes('hi'), inert);
+        check('malicious snapshot is rendered inertly (no scripts, no editors, no handlers fired)',
+            inert.pwned === 0 && !inert.scriptInPreview && inert.text.includes('hi'), inert);
         await main.evaluate(() => closeAllModals());
 
         const traversal = await main.evaluate(async () => {

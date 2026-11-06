@@ -509,8 +509,8 @@ function triggerAutoSave() {
         refreshOutlineIfOpen();
     }
 
-    // Debounced Auto-save if enabled
-    if (localStorage.getItem('autoSave') === 'true') {
+    // Debounced Auto-save (on by default)
+    if ((localStorage.getItem('autoSave') ?? 'true') === 'true') {
         clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => {
             saveFile();

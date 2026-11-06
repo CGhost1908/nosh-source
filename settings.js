@@ -55,8 +55,8 @@ function loadSettingsIntoUI() {
         applyFontSize(fontSize);
     }
 
-    // 2. Auto save
-    const autoSave = localStorage.getItem('autoSave') === 'true';
+    // 2. Auto save (on by default)
+    const autoSave = localStorage.getItem('autoSave') !== 'false';
     const autoSaveCheckbox = document.getElementById('setting-auto-save');
     if (autoSaveCheckbox) autoSaveCheckbox.checked = autoSave;
 

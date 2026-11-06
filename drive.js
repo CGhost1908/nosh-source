@@ -445,7 +445,7 @@ async function importFileFromDrive(fileName, fileId, btn) {
         await fsPromises.writeFile(targetPath, noteText, 'utf8');
 
         showToast(`Imported "${fileName}" from Google Drive`, 'success');
-        await readDatabase(path.basename(fileName, '.nsh'));
+        await readDatabase(path.basename(fileName, '.nsh'), true);
         checkNonExistFilesDrive();
     } catch (err) {
         console.error('Error importing file from Drive:', err);
