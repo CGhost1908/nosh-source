@@ -5,6 +5,7 @@ node_modules/
 dist/
 out/
 build/
+nosh-windows-unsigned/
 
 # Secrets and credentials
 client_secret*.json
