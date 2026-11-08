@@ -1,4 +1,4 @@
-# 📝 Nosh Privacy Policy
+# Nosh Privacy Policy
 
 **Effective Date:** November 8, 2026  
 **Application:** Nosh Desktop (Code & Note Editor)  
@@ -8,9 +8,9 @@
 
 ---
 
-## 🛡️ Fundamental Privacy & Security Commitment
+## Fundamental Privacy and Security Commitment
 
-> **&ldquo;This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.&rdquo;**
+> "This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it."
 
 By default, Nosh operates **100% offline on your local computer**. There is no mandatory user registration, no remote telemetry, no background analytics, and no advertising. Your notes and files belong solely to you.
 
@@ -28,12 +28,12 @@ All your notes (saved as standard `.nsh` files), organizational folders, tags, v
 
 ## 2. What We Do NOT Collect
 
-- **🚫 Zero Telemetry & Analytics:** Nosh does **not** contain telemetry libraries, analytics tracking suites (such as Google Analytics, PostHog, or Mixpanel), advertising SDKs, remote crash reporters (such as Sentry), or hardware fingerprinting mechanisms.
-- **🚫 Zero User Profiling:** We do not monitor which features you use, what notes you write, or how long your editor sessions last.
+- **Zero Telemetry and Analytics:** Nosh does **not** contain telemetry libraries, analytics tracking suites (such as Google Analytics, PostHog, or Mixpanel), advertising SDKs, remote crash reporters (such as Sentry), or hardware fingerprinting mechanisms.
+- **Zero User Profiling:** We do not monitor which features you use, what notes you write, or how long your editor sessions last.
 
 ---
 
-## 3. Network Communications & Optional External Features
+## 3. Network Communications and Optional External Features
 
 Nosh connects to the internet **only** when you explicitly invoke an optional feature that intrinsically requires network connectivity.
 
@@ -50,7 +50,7 @@ Nosh connects to the internet **only** when you explicitly invoke an optional fe
 
 ---
 
-### 3.1 Google Drive Integration & Limited Use Disclosure
+### 3.1 Google Drive Integration and Limited Use Disclosure
 
 If you choose to use the optional Google Drive synchronization feature:
 
@@ -66,7 +66,7 @@ If you choose to use the optional Google Drive synchronization feature:
 
 ### 3.2 Public Note Sharing via Supabase
 
-- **Explicit Action Only:** Uploading occurs *only* when you explicitly open the Share dialog and click &ldquo;Publish&rdquo;.
+- **Explicit Action Only:** Uploading occurs *only* when you explicitly open the Share dialog and click "Publish".
 - **Isolated Scope:** Only the specific note you chose to publish is uploaded to our Supabase database instance. All other notes in your library remain strictly on your local disk.
 - **Public Availability:** Any person possessing the unique share link will be able to view the contents of the published note via the web viewer (`view.html`). Do not publish notes containing passwords, secrets, or confidential personal information.
 - **Unpublishing / Deletion:** You can unpublish or delete a shared note at any time via the editor interface, which immediately purges the record from the Supabase database.
@@ -81,7 +81,7 @@ When you publish a note that contains locally embedded images or video files, ex
 - **Zero Knowledge:** The relay database receives only encrypted ciphertext blobs, deterministic blind IDs, and message authentication codes (MACs). Decryption keys are derived locally from your private AuthToken and ephemeral QR exchange keys.
 - **Server Blindness:** Neither Nosh maintainers nor Supabase have the cryptographic keys necessary to decrypt or inspect the contents of your synchronized notes.
 
-### 3.5 Embedded Content & Third-Party Services
+### 3.5 Embedded Content and Third-Party Services
 
 - **YouTube Companion Player:** When you embed a YouTube URL, Nosh interacts with the official YouTube IFrame and oEmbed APIs to render the player. Your interactions with the YouTube player are subject to the [Google Privacy Policy](https://policies.google.com/privacy). Nosh does not monitor, log, or track your viewing habits.
 - **Mathematical Typesetting (KaTeX):** KaTeX styling is retrieved over secure HTTPS from Cloudflare's cdnjs CDN. No personal user information is transmitted during this static stylesheet request.
@@ -96,7 +96,7 @@ When you publish a note that contains locally embedded images or video files, ex
 
 ---
 
-## 5. User Control, Data Retention & Deletion
+## 5. User Control, Data Retention and Deletion
 
 - **Full Retention Control:** Because your notes are saved on your local drive, you retain absolute ownership. You decide how long files are kept.
 - **Trash and History:** Deleted notes are moved to your local trash folder within the Nosh workspace, allowing manual permanent deletion or restoration. Version history snapshots are stored strictly locally and can be cleared at will.
@@ -113,13 +113,13 @@ To protect our users against tampering, unauthorized modifications, and malware 
 
 ---
 
-## 7. Regulatory & Global Compliance (GDPR, CCPA, COPPA)
+## 7. Regulatory and Global Compliance (GDPR, CCPA, COPPA)
 
 Because Nosh adopts a strict local-first philosophy and does not collect, sell, or commercialize personal data, Nosh inherently complies with international privacy regulations including the General Data Protection Regulation (GDPR, Regulation (EU) 2016/679), the California Consumer Privacy Act (CCPA), and the Children's Online Privacy Protection Act (COPPA). We do not knowingly collect information from children or any individuals.
 
 ---
 
-## 8. Open Source & Auditability
+## 8. Open Source and Auditability
 
 Nosh is free and open-source software distributed under the terms of the **MIT License**. Our complete source code, build scripts, and CI/CD pipelines are fully auditable by the public:
 - Source Code: [https://github.com/CGhost1908/nosh-source](https://github.com/CGhost1908/nosh-source)
