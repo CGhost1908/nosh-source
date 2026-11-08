@@ -41,9 +41,13 @@ feature that needs them:
     Nosh accesses only the files and folders you choose to use with Nosh.
     You can disconnect your account at any time in the app settings.
 
-  * Public note sharing (Supabase) - only when you choose to publish a note.
+  * Public note sharing (Supabase & Catbox) - only when you choose to publish a note.
     The published note's content is uploaded so that it can be viewed by
-    anyone with the link. Notes you do not publish are never uploaded.
+    anyone with the link. Embedded images are hosted via Catbox. Notes you do
+    not publish are never uploaded.
+
+  * E2EE Vault sync - optional zero-account cross-device synchronization.
+    Notes are encrypted client-side before upload; the server cannot read them.
 
   * Embedded web content (e.g. YouTube player) - only when you open it.
 
