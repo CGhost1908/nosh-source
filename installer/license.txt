@@ -44,7 +44,7 @@ feature that needs them:
   * Public note sharing (Supabase & Catbox) - only when you choose to publish a note.
     The published note's content is uploaded so that it can be viewed by
     anyone with the link. Embedded images are hosted via Catbox. Notes you do
-    not publish are never uploaded.
+    not publish are never made publicly accessible.
 
   * E2EE Vault sync - optional zero-account cross-device synchronization.
     Notes are encrypted client-side before upload; the server cannot read them.

@@ -94,16 +94,16 @@
         <hr>
 
         <h2>Overview</h2>
-        <p>Nosh is a desktop notepad and code organizer. Notes, files, and settings are stored locally on your device by default. Nosh does not run background telemetry or usage analytics. Network connections are initiated only when you explicitly invoke features that interact with external services, such as cloud backup, public note sharing, cross-device synchronization, or embedded media playback.</p>
+        <p>Nosh is a desktop notepad and code organizer built on a local-first architecture. Notes, files, and settings are stored locally on your device by default. Nosh does not run background telemetry or usage analytics. Network connections are initiated only when you explicitly invoke features that interact with external services, such as cloud backup, public note sharing, cross-device synchronization, or embedded media playback.</p>
 
         <hr>
 
-        <h2>1. Local Data Storage</h2>
-        <p>All notes (saved as <code>.nsh</code> files), folder structures, snapshots, and application settings are written directly to your local file system.</p>
+        <h2>1. Local Data Storage and Synchronization</h2>
+        <p>All notes (saved as <code>.nsh</code> files), folder structures, snapshots, and application settings are stored primarily on your local file system.</p>
         <ul>
-            <li><strong>Local Ownership:</strong> You own your files. You can copy, backup, move, or delete your note files directly through your operating system file manager at any time.</li>
-            <li><strong>No Mandatory Account:</strong> You do not need to register an account or provide personal information to use the core application.</li>
-            <li><strong>No Central Surveillance Server:</strong> Nosh does not operate a proprietary central server that indexes or inspects your local notes.</li>
+            <li><strong>Local-First Architecture:</strong> Your local device remains the primary storage of your data. You can copy, backup, move, or delete your note files directly through your operating system file manager at any time.</li>
+            <li><strong>Synchronization vs. Public Sharing:</strong> Unencrypted notes are never sent to remote servers unless you explicitly choose to publish an individual note to the web. Notes synchronized across your devices are encrypted on your local device before transmission so that the relay server cannot inspect their content.</li>
+            <li><strong>No Mandatory Account:</strong> You do not need to register an account or provide personal information to use the application.</li>
         </ul>
 
         <hr>
@@ -137,8 +137,8 @@
         <h3>3.2 Public Note Sharing (Supabase)</h3>
         <p>If you use the feature to publish a note to the web:</p>
         <ul>
-            <li>Only the specific note you explicitly choose to publish is transmitted over HTTPS to our Supabase database instance (<code>buvtdaxlibejpjlkxaor.supabase.co</code>).</li>
-            <li>Notes you do not publish remain strictly on your local computer.</li>
+            <li>Only the specific note you explicitly choose to publish is transmitted over HTTPS to our Supabase database instance (<code>buvtdaxlibejpjlkxaor.supabase.co</code>) in readable format.</li>
+            <li>Notes you do not choose to publish are never exposed publicly or stored as readable plaintext on remote servers.</li>
             <li>Anyone possessing the generated share link can view the contents of the published note via the public web viewer (<code>view.html</code>). Do not publish notes containing passwords, private credentials, or sensitive personal information.</li>
         </ul>
 
@@ -150,13 +150,13 @@
             <li><strong>Deletion Limitations:</strong> Nosh does not possess an automated deletion API or deletion token mechanism for Catbox.moe. Removing or editing a shared note in Nosh does not automatically purge previously uploaded media files from Catbox servers. If you require manual deletion of media from Catbox, you must contact Catbox administration directly or refrain from publishing notes that contain sensitive media.</li>
         </ul>
 
-        <h3>3.4 Multi-Device Synchronization (Optional)</h3>
-        <p>If you use the optional cross-device synchronization feature:</p>
+        <h3>3.4 Cross-Device Synchronization (Supabase)</h3>
+        <p>To keep your notes seamlessly synchronized across desktop and mobile devices, Nosh uses a synchronization relay hosted on Supabase:</p>
         <ul>
-            <li><strong>Client-Side Cryptography:</strong> Notes are encrypted on your local device before transmission to the sync relay using client-side symmetric stream encryption and keyed message authentication (MAC).</li>
-            <li><strong>Key Derivation and AuthToken:</strong> Cryptographic keys and deterministic note row identifiers are derived locally from a 64-character hex AuthToken generated on your device using <code>window.crypto.getRandomValues</code>.</li>
-            <li><strong>QR Code Pairing:</strong> When transferring credentials between devices, the AuthToken is encrypted with an ephemeral transfer key and displayed as a QR code (<code>nosh://token?...</code>). This mechanism is designed strictly for direct physical optical transfer (screen-to-camera) between devices in close proximity, relying on physical air-gap proximity to prevent remote man-in-the-middle (MITM) interception. Users are responsible for shielding their screen from unauthorized cameras during pairing.</li>
-            <li><strong>Metadata Limitations:</strong> Because note row identifiers and database IDs are derived deterministically to enable direct synchronization, the sync relay database operator (Supabase) can observe metadata such as transaction timestamps, payload byte sizes, and encrypted update frequencies, although plain-text note contents remain encrypted.</li>
+            <li><strong>Client-Side Encryption (E2EE):</strong> Unlike publicly shared notes, all notes synchronized across devices are encrypted directly on your local device before transmission using client-side symmetric stream encryption and keyed message authentication (MAC).</li>
+            <li><strong>Zero Plaintext on Server:</strong> The synchronization relay receives and stores only encrypted ciphertext blobs and pseudonymous row identifiers. Decryption keys are derived locally on your devices from a 64-character AuthToken generated via <code>window.crypto.getRandomValues</code>. The server and third parties have no ability to read, index, or view your note titles or content.</li>
+            <li><strong>Pairing and Credential Exchange:</strong> Device pairing is conducted by scanning an encrypted QR code containing an ephemeral transfer key. This optical exchange is designed for devices in close physical proximity to prevent remote network interception. Users are responsible for shielding their screen from unauthorized cameras during pairing.</li>
+            <li><strong>Metadata Visibility:</strong> Because row identifiers and timestamps are necessary to synchronize updates between devices, the relay server processes metadata such as update timestamps, payload byte sizes, and encrypted update frequencies, while plain text note contents remain encrypted.</li>
         </ul>
 
         <h3>3.5 Embedded Content (YouTube Companion Player)</h3>
@@ -171,12 +171,13 @@
             <li><strong>Google Drive:</strong> Backed-up note files remain in your personal <code>noshTheNotepad</code> folder until you manually delete them from Google Drive or through Nosh. Disconnecting your account purges all local authentication tokens immediately.</li>
             <li><strong>Supabase Database and Backups:</strong>
                 <ul>
-                    <li>Content published to Supabase remains in the active database table until modified or removed.</li>
+                    <li>Publicly shared notes remain accessible via their public link until updated or removed.</li>
+                    <li>Synchronized notes are stored as encrypted blobs under your pseudonymous vault ID. Modifying or deleting a note locally propagates the encrypted update or deletion to the sync relay.</li>
                     <li>Supabase maintains automated database backups for disaster recovery. Backups retain database snapshots according to Supabase's operational retention schedule (typically up to 30 days) before being overwritten.</li>
                     <li>Standard HTTP connection logs (including IP addresses and request timestamps) are collected by Supabase infrastructure for network security, DDoS protection, and diagnostic purposes, retained according to Supabase operational policies (typically 7 to 30 days).</li>
                 </ul>
             </li>
-            <li><strong>Catbox.moe Media:</strong> Media files uploaded to Catbox.moe are hosted independently under Catbox's retention policies and are not automatically deleted upon unpublishing a note.</li>
+            <li><strong>Catbox.moe Media:</strong> Media files uploaded to Catbox.moe during note publishing are hosted independently under Catbox's retention policies and are not automatically deleted upon unpublishing a note.</li>
         </ul>
 
         <hr>
@@ -201,7 +202,7 @@
                     <li>User-authored note content may contain personal data if you voluntarily choose to include personal information and publish or sync it.</li>
                 </ul>
             </li>
-            <li><strong>Legal Basis (GDPR Art. 6(1)(a) / 6(1)(b)):</strong> Processing of data through online features occurs exclusively upon voluntary, explicit user initiation to deliver requested services (backup, sharing, sync).</li>
+            <li><strong>Legal Basis (GDPR Art. 6(1)(a) / 6(1)(b)):** Processing of data through online features occurs exclusively upon voluntary, explicit user initiation to deliver requested services (backup, sharing, sync).</li>
             <li><strong>User Rights:</strong> You have the right to access, export, modify, and delete your local data at any time. For third-party services, you may revoke Google permissions via your Google Account Security settings, disconnect cloud providers in Nosh Settings, or contact project maintainers for assistance regarding shared database records.</li>
         </ul>
 
