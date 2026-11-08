@@ -60,41 +60,6 @@
             margin-bottom: 6px;
         }
 
-        blockquote {
-            border-left: 4px solid #6366f1;
-            background: rgba(99, 102, 241, 0.1);
-            padding: 12px 16px;
-            margin: 16px 0;
-            color: #ffffff;
-        }
-
-        blockquote p {
-            margin: 0;
-            color: #ffffff;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            font-size: 0.95em;
-        }
-
-        th, td {
-            border: 1px solid #374151;
-            padding: 10px 12px;
-            text-align: left;
-        }
-
-        th {
-            background-color: #262933;
-            color: #ffffff;
-        }
-
-        td {
-            color: #d1d5db;
-        }
-
         code {
             background-color: #111318;
             border: 1px solid #374151;
@@ -128,186 +93,88 @@
 
         <hr>
 
-        <h2>Fundamental Privacy and Security Commitment</h2>
-        <blockquote>
-            <p><strong>&ldquo;This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.&rdquo;</strong></p>
-        </blockquote>
-        <p>By default, Nosh operates <strong>100% offline on your local computer</strong>. There is no mandatory user registration, no remote telemetry, no background analytics, and no advertising. Your notes and files belong solely to you.</p>
+        <h2>Overview</h2>
+        <p>Nosh is a desktop notepad and code organizer. Your notes, files, and settings are stored locally on your device by default. Nosh does not collect background telemetry or track your usage, and only establishes network connections for online features you explicitly choose to use.</p>
 
         <hr>
 
-        <h2>1. Architectural Principle: Local-First</h2>
-        <p>All your notes (saved as standard <code>.nsh</code> files), organizational folders, tags, version history snapshots, and editor settings are written directly to your local file system (by default inside your operating system's local application data directory or a custom directory chosen by you).</p>
+        <h2>1. Local Data Storage</h2>
+        <p>All notes (saved as <code>.nsh</code> files), folder structures, snapshots, and application settings are written directly to your local file system.</p>
         <ul>
-            <li><strong>No Central Nosh Server:</strong> There is no proprietary cloud server operated by Nosh that silently syncs your notes.</li>
-            <li><strong>No User Account:</strong> You can download, install, and use Nosh indefinitely without providing an email address, name, or personal details.</li>
-            <li><strong>Full Data Portability:</strong> You can inspect, copy, backup, or delete your note files directly using your operating system's file manager at any time.</li>
+            <li><strong>Local Ownership:</strong> You own your files. You can copy, backup, move, or delete your note files directly through your system file manager at any time.</li>
+            <li><strong>No Mandatory Account:</strong> You do not need to register an account or provide personal information to use the application.</li>
+            <li><strong>No Central Surveillance Server:</strong> Nosh does not run a proprietary server that silently reads or indexes your local notes.</li>
         </ul>
 
         <hr>
 
-        <h2>2. What We Do NOT Collect</h2>
+        <h2>2. No Telemetry or Usage Analytics</h2>
         <ul>
-            <li><strong>Zero Telemetry and Analytics:</strong> Nosh does <strong>not</strong> contain telemetry libraries, analytics tracking suites (such as Google Analytics, PostHog, or Mixpanel), advertising SDKs, remote crash reporters (such as Sentry), or hardware fingerprinting mechanisms.</li>
-            <li><strong>Zero User Profiling:</strong> We do not monitor which features you use, what notes you write, or how long your editor sessions last.</li>
+            <li>Nosh does not include telemetry frameworks, user tracking services, or analytics packages (such as Google Analytics, PostHog, or Mixpanel).</li>
+            <li>Nosh does not collect crash logs, hardware fingerprints, session durations, or statistics about what you write.</li>
         </ul>
 
         <hr>
 
-        <h2>3. Network Communications and Optional External Features</h2>
-        <p>Nosh connects to the internet <strong>only</strong> when you explicitly invoke an optional feature that intrinsically requires network connectivity.</p>
+        <h2>3. Network Connections and Online Features</h2>
+        <p>Nosh only connects to external networks when you use features that inherently require an internet connection:</p>
 
-        <h3>Summary of Network Endpoints</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Feature</th>
-                    <th>External Endpoint</th>
-                    <th>Trigger Action</th>
-                    <th>Data Transmitted</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>Google Drive Sync</strong></td>
-                    <td><code>googleapis.com</code></td>
-                    <td>User clicks "Connect Google Drive" &amp; approves OAuth</td>
-                    <td>OAuth token, note files for cloud backup (<code>noshTheNotepad</code>)</td>
-                    <td><em>Strictly Opt-In</em></td>
-                </tr>
-                <tr>
-                    <td><strong>Public Note Sharing</strong></td>
-                    <td><code>buvtdaxlibejpjlkxaor.supabase.co</code></td>
-                    <td>User clicks "Publish" / "Share" on a specific note</td>
-                    <td>Rendered text / HTML of the published note</td>
-                    <td><em>Strictly Opt-In</em></td>
-                </tr>
-                <tr>
-                    <td><strong>Shared Media Hosting</strong></td>
-                    <td><code>catbox.moe</code></td>
-                    <td>User publishes a note containing local images/videos</td>
-                    <td>Only the media files attached to the shared note</td>
-                    <td><em>Strictly Opt-In</em></td>
-                </tr>
-                <tr>
-                    <td><strong>E2EE Vault / Mobile Sync</strong></td>
-                    <td><code>buvtdaxlibejpjlkxaor.supabase.co</code></td>
-                    <td>User connects sync via secret AuthToken / QR code</td>
-                    <td>Client-side encrypted ciphertext blobs (Zero-Knowledge)</td>
-                    <td><em>Strictly Opt-In</em></td>
-                </tr>
-                <tr>
-                    <td><strong>YouTube Companion</strong></td>
-                    <td><code>youtube.com</code> / <code>i.ytimg.com</code></td>
-                    <td>User embeds or plays a YouTube video link</td>
-                    <td>Standard YouTube iframe &amp; oEmbed API requests</td>
-                    <td><em>Strictly Opt-In</em></td>
-                </tr>
-                <tr>
-                    <td><strong>KaTeX Math Engine</strong></td>
-                    <td><code>cdnjs.cloudflare.com</code></td>
-                    <td>User previews mathematical formulas</td>
-                    <td>Static CSS stylesheet retrieval over HTTPS</td>
-                    <td><em>Static Asset</em></td>
-                </tr>
-            </tbody>
-        </table>
-
-        <h3>3.1 Google Drive Integration and Limited Use Disclosure</h3>
-        <p>If you choose to use the optional Google Drive synchronization feature:</p>
+        <h3>3.1 Google Drive Integration (Optional)</h3>
+        <p>If you connect Google Drive to back up or sync your notes:</p>
         <ul>
-            <li><strong>OAuth Scopes:</strong> Nosh requests authorization exclusively for:
-                <ul>
-                    <li><code>https://www.googleapis.com/auth/drive.file</code> — Permits Nosh to create, view, and modify <em>only</em> files and folders that were opened or created with Nosh inside the dedicated <code>noshTheNotepad</code> folder. Nosh has zero access to your other personal Drive files, folders, photos, or documents.</li>
-                    <li><code>https://www.googleapis.com/auth/userinfo.email</code> — Read-only permission strictly used to display your connected account email in the app's settings window so you can identify which Google account is active.</li>
-                </ul>
-            </li>
-            <li><strong>Local Token Storage:</strong> Authentication tokens are stored exclusively on your local device. Tokens are never transmitted to Nosh maintainers, proxies, or third parties.</li>
-            <li><strong>Account Disconnection:</strong> You can disconnect your Google account at any time in Settings. Disconnecting immediately removes all stored OAuth tokens from your local machine and terminates all API sessions.</li>
-            <li><strong>Google API Services User Data Policy Compliance:</strong> Nosh's use and transfer to any other app of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements:
-                <ul>
-                    <li>Google user data is never transferred to third parties (except as required to provide note synchronization).</li>
-                    <li>Google user data is never used for serving advertisements.</li>
-                    <li>Google user data is never used for training generalized artificial intelligence (AI) or machine learning (ML) models.</li>
-                </ul>
-            </li>
+            <li><strong>Scope of Access:</strong> Nosh requests access only to files and folders it creates or opens within the dedicated <code>noshTheNotepad</code> folder (<code>https://www.googleapis.com/auth/drive.file</code>), and read-only access to your email address (<code>https://www.googleapis.com/auth/userinfo.email</code>) to display the connected account in settings. Nosh cannot view or modify other files in your Google Drive.</li>
+            <li><strong>Token Storage:</strong> OAuth authentication tokens are stored exclusively on your local computer and are never sent to third parties.</li>
+            <li><strong>Disconnection:</strong> You can disconnect Google Drive at any time in the app settings, which immediately purges all stored tokens from your machine.</li>
+            <li><strong>Google Limited Use Compliance:</strong> Nosh adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including Limited Use requirements. Google user data is not transferred to third parties (except to facilitate Google Drive sync), is not used for advertising, and is not used to train AI or machine learning models.</li>
         </ul>
 
-        <h3>3.2 Public Note Sharing via Supabase</h3>
+        <h3>3.2 Public Note Sharing (Supabase)</h3>
+        <p>If you use the feature to share a note publicly via a link:</p>
         <ul>
-            <li><strong>Explicit Action Only:</strong> Uploading occurs <em>only</em> when you explicitly open the Share dialog and click &ldquo;Publish&rdquo;.</li>
-            <li><strong>Isolated Scope:</strong> Only the specific note you chose to publish is uploaded to our Supabase database instance. All other notes in your library remain strictly on your local disk.</li>
-            <li><strong>Public Availability:</strong> Any person possessing the unique share link will be able to view the contents of the published note via the web viewer (<code>view.html</code>). Do not publish notes containing passwords, secrets, or confidential personal information.</li>
-            <li><strong>Unpublishing / Deletion:</strong> You can unpublish or delete a shared note at any time via the editor interface, which immediately purges the record from the Supabase database.</li>
+            <li>Only the specific note you explicitly choose to publish is uploaded over HTTPS to our Supabase database instance.</li>
+            <li>Notes you do not publish remain strictly on your local computer.</li>
+            <li>Anyone with the generated share link can view the published note through the web viewer. You can unpublish or delete the shared note from the editor at any time.</li>
         </ul>
 
-        <h3>3.3 Public Media Hosting via Catbox.moe</h3>
-        <p>When you publish a note that contains locally embedded images or video files, external web browsers cannot access your local hard drive. In this event, Nosh uploads only the embedded media assets to the public media host <a href="https://catbox.moe">Catbox.moe</a> via HTTPS so that viewers of your shared link can view the images. This occurs solely as part of the explicit note publishing process.</p>
+        <h3>3.3 Media Hosting for Shared Notes (Catbox.moe)</h3>
+        <p>If a note you choose to share publicly contains local image or video files, those media assets are uploaded via HTTPS to <a href="https://catbox.moe">Catbox.moe</a> so that viewers of the shared web link can see them. This upload occurs only upon publishing a note containing media.</p>
 
-        <h3>3.4 End-to-End Encrypted (E2EE) Vault Sync</h3>
+        <h3>3.4 Multi-Device Vault Sync (Optional)</h3>
+        <p>If you use the optional cross-device synchronization feature:</p>
         <ul>
-            <li><strong>Client-Side Encryption:</strong> All notes are encrypted on your local device using high-grade 256-bit symmetric encryption before being transmitted over WebSockets / HTTPS to Supabase.</li>
-            <li><strong>Zero Knowledge:</strong> The relay database receives only encrypted ciphertext blobs, deterministic blind IDs, and message authentication codes (MACs). Decryption keys are derived locally from your private AuthToken and ephemeral QR exchange keys.</li>
-            <li><strong>Server Blindness:</strong> Neither Nosh maintainers nor Supabase have the cryptographic keys necessary to decrypt or inspect the contents of your synchronized notes.</li>
+            <li>Notes are encrypted on your device using client-side encryption before transmission.</li>
+            <li>The relay server receives only encrypted ciphertext blobs and cannot read the plain text of your notes.</li>
         </ul>
 
-        <h3>3.5 Embedded Content and Third-Party Services</h3>
+        <h3>3.5 Embedded Content (YouTube)</h3>
+        <p>When you embed or play a YouTube video in Nosh, requests are made directly to YouTube/Google servers (IFrame and oEmbed APIs) to display the player. These requests are governed by Google's Privacy Policy. Nosh does not monitor or record your viewing history.</p>
+
+        <hr>
+
+        <h2>4. Security</h2>
         <ul>
-            <li><strong>YouTube Companion Player:</strong> When you embed a YouTube URL, Nosh interacts with the official YouTube IFrame and oEmbed APIs to render the player. Your interactions with the YouTube player are subject to the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>. Nosh does not monitor, log, or track your viewing habits.</li>
-            <li><strong>Mathematical Typesetting (KaTeX):</strong> KaTeX styling is retrieved over secure HTTPS from Cloudflare's cdnjs CDN. No personal user information is transmitted during this static stylesheet request.</li>
+            <li>All external network transmissions (Google Drive, Supabase, Catbox, YouTube) are encrypted using industry-standard protocols (HTTPS / TLS).</li>
+            <li>Access tokens and credentials are kept strictly on your local device.</li>
+            <li>Release binaries do not contain hardcoded private credentials or backdoor access.</li>
         </ul>
 
         <hr>
 
-        <h2>4. Data Storage and Security</h2>
+        <h2>5. Data Retention and Deletion</h2>
         <ul>
-            <li><strong>Transport Layer Security:</strong> All external network communication (Google Drive API, Supabase, Catbox, YouTube) strictly enforces modern encryption protocols (HTTPS/TLS 1.2 or TLS 1.3 and WSS).</li>
-            <li><strong>Local Security:</strong> Note data and tokens reside in your operating system's user profile. Access is governed by standard operating system user account access control.</li>
-            <li><strong>No Bundled Secrets:</strong> Release binaries contain no secret backdoor credentials or proprietary surveillance code.</li>
+            <li>You can delete local notes at any time. Deleted notes are moved to your local trash folder or permanently removed.</li>
+            <li>Disconnecting your Google Drive account removes all cached tokens immediately.</li>
+            <li>Shared notes can be removed from the public database by deleting or unpublishing them within the app.</li>
+            <li>Uninstalling Nosh removes the program binaries through standard operating system controls.</li>
         </ul>
 
         <hr>
 
-        <h2>5. User Control, Data Retention and Deletion</h2>
-        <ul>
-            <li><strong>Full Retention Control:</strong> Because your notes are saved on your local drive, you retain absolute ownership. You decide how long files are kept.</li>
-            <li><strong>Trash and History:</strong> Deleted notes are moved to your local trash folder within the Nosh workspace, allowing manual permanent deletion or restoration. Version history snapshots are stored strictly locally and can be cleared at will.</li>
-            <li><strong>Application Uninstallation:</strong> Nosh can be uninstalled at any time using standard operating system controls (e.g., Windows <em>Settings &gt; Apps &gt; Installed apps</em>). Uninstallation cleanly removes the program binaries without automatically deleting your local note text files, ensuring you never inadvertently lose your personal work.</li>
-        </ul>
-
-        <hr>
-
-        <h2>6. Code Signing and Software Integrity</h2>
-        <p>To protect our users against tampering, unauthorized modifications, and malware injection:</p>
-        <ul>
-            <li>Official Windows binaries of Nosh are built directly from this public repository using automated GitHub Actions release workflows.</li>
-            <li>Free code signing is provided by <a href="https://about.signpath.io">SignPath.io</a>, with digital certificates issued by the <a href="https://signpath.org">SignPath Foundation</a>.</li>
-            <li>This digital signature guarantees that the executable you install on your machine was created directly from the authentic open-source code and has not been altered by third parties.</li>
-        </ul>
-
-        <hr>
-
-        <h2>7. Regulatory and Global Compliance (GDPR, CCPA, COPPA)</h2>
-        <p>Because Nosh adopts a strict local-first philosophy and does not collect, sell, or commercialize personal data, Nosh inherently complies with international privacy regulations including the General Data Protection Regulation (GDPR, Regulation (EU) 2016/679), the California Consumer Privacy Act (CCPA), and the Children's Online Privacy Protection Act (COPPA). We do not knowingly collect information from children or any individuals.</p>
-
-        <hr>
-
-        <h2>8. Open Source and Auditability</h2>
-        <p>Nosh is free and open-source software distributed under the terms of the <strong>MIT License</strong>. Our complete source code, build scripts, and CI/CD pipelines are fully auditable by the public:</p>
-        <ul>
-            <li>Source Code: <a href="https://github.com/CGhost1908/nosh-source">https://github.com/CGhost1908/nosh-source</a></li>
-            <li>Public Distribution: <a href="https://github.com/CGhost1908/nosh">https://github.com/CGhost1908/nosh</a></li>
-        </ul>
-
-        <hr>
-
-        <h2>9. Contact Us</h2>
-        <p>If you have any questions, concerns, or requests regarding this Privacy Policy, please contact the maintainer:</p>
+        <h2>6. Contact</h2>
+        <p>If you have questions about this privacy policy, you can contact:</p>
         <ul>
             <li><strong>Email:</strong> <a href="mailto:noshthenotepad@gmail.com">noshthenotepad@gmail.com</a></li>
-            <li><strong>GitHub Issues:</strong> <a href="https://github.com/CGhost1908/nosh-source/issues">https://github.com/CGhost1908/nosh-source/issues</a></li>
-            <li><strong>Maintainer:</strong> CGhost1908</li>
+            <li><strong>Repository:</strong> <a href="https://github.com/CGhost1908/nosh-source/issues">https://github.com/CGhost1908/nosh-source/issues</a></li>
         </ul>
     </div>
 </body>
