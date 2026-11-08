@@ -316,6 +316,59 @@ body {
     border-top: 1px solid var(--border-subtle);
     margin: 28px 0;
 }
+.doc-body code.inline-code,
+.doc-body :not(pre) > code {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.88em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-subtle);
+    color: #e2e8f0;
+}
+.doc-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    border: 1px solid var(--border-subtle);
+}
+.doc-body th, .doc-body td {
+    border: 1px solid var(--border-subtle);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+    color: #c9d1d9;
+}
+.doc-body th {
+    background: rgba(255, 255, 255, 0.04);
+    font-weight: 600;
+    color: #f1f5f9;
+}
+.doc-body tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.015);
+}
+.doc-body .claude-embedded-diagram {
+    margin: 16px 0;
+    padding: 16px 18px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    text-align: center;
+    overflow-x: auto;
+}
+.doc-body .claude-embedded-diagram svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+.doc-body .claude-diagram-caption {
+    margin-top: 8px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
 
 /* --- Interactive Checklists --- */
 .checklist-item {

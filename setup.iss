@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "nosh"
-#define MyAppVersion "1.4.0"
+#define MyAppVersion "1.4.1"
 #define MyAppExeName "nosh.exe"
 #define MyAppAssocName MyAppName + " File"
 #define MyAppAssocExt ".nsh"
@@ -29,7 +29,7 @@ DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputDir=dist
-OutputBaseFilename=nosh-1.4.0-setup
+OutputBaseFilename=nosh-1.4.1-setup
 SetupIconFile=icon.ico
 Compression=lzma
 SolidCompression=yes

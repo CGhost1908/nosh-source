@@ -74,10 +74,34 @@ function formatDoc(cmd, value = null) {
         showToast('Create or open a note first', 'warning');
         return;
     }
+    // Protect the note's first <h1> header from being converted into another block type or list
+    if (content && content.firstElementChild && content.firstElementChild.tagName === 'H1') {
+        const firstH1 = content.firstElementChild;
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            const touchesFirstH1 = firstH1.contains(range.startContainer) || firstH1.contains(range.endContainer) || range.intersectsNode(firstH1);
+            if (touchesFirstH1) {
+                const lowerCmd = String(cmd || '').toLowerCase();
+                const lowerVal = String(value || '').toLowerCase();
+                if ((lowerCmd === 'formatblock' && lowerVal !== 'h1' && lowerVal !== '<h1>') ||
+                    lowerCmd === 'insertunorderedlist' ||
+                    lowerCmd === 'insertorderedlist' ||
+                    lowerCmd === 'outdent' ||
+                    lowerCmd === 'indent') {
+                    content.focus();
+                    return;
+                }
+            }
+        }
+    }
     if (value) {
         document.execCommand(cmd, false, value);
     } else {
         document.execCommand(cmd, false, null);
+    }
+    if (typeof ensureNoteFirstHeader === 'function') {
+        ensureNoteFirstHeader(content, activeNoteName, false);
     }
     content.focus();
 }
@@ -91,6 +115,7 @@ function getCleanContentHTML() {
     clone.querySelectorAll('.media-toolbar').forEach(el => el.remove());
     clone.querySelectorAll('.media-resize-handle').forEach(el => el.remove());
     clone.querySelectorAll('.block-drag-handle, .media-drag-handle').forEach(el => el.remove());
+    clone.querySelectorAll('h1[data-placeholder]').forEach(el => el.removeAttribute('data-placeholder'));
     // Ensure all code textareas have their current value and display cleanly
     const liveTextareas = content.querySelectorAll('textarea.code');
     const cloneTextareas = clone.querySelectorAll('textarea.code');
@@ -131,6 +156,13 @@ async function saveFile() {
     if (!activeNoteName) {
         if (typeof showToast === 'function') showToast('Open or create a note first to save', 'warning');
         return;
+    }
+
+    if (typeof ensureNoteFirstHeader === 'function') {
+        ensureNoteFirstHeader(content, activeNoteName, false);
+    }
+    if (typeof syncFirstHeaderToNoteName === 'function') {
+        await syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: true, allowUniqueSuffix: true });
     }
 
     const safeName = path.basename(activeNoteName);
@@ -184,6 +216,9 @@ async function saveFile() {
         if (typeof populateDocumentOutline === 'function') {
             populateDocumentOutline();
         }
+        if (typeof window.scheduleAuthTokenVaultPush === 'function') {
+            window.scheduleAuthTokenVaultPush();
+        }
     } catch (err) {
         console.error('Error saving note:', err);
         showToast('Error saving note', 'error');
@@ -206,22 +241,179 @@ async function saveAsDialog() {
     }
 }
 
-// Native Open File
-async function openFileFromSystem() {
-    const fileData = await ipcRenderer.invoke('open-file-dialog');
-    if (!fileData) return;
-
-    const { fileName, content: loadedContent } = fileData;
-    const destPath = path.join(savesDir, `${fileName}.nsh`);
+// Universal Import Result Handler
+async function handleImportResult(result, targetFolderId = null) {
+    if (!result) return false;
+    await invokeSavesDir();
 
     try {
-        await fsPromises.writeFile(destPath, loadedContent, 'utf8');
-        showToast(`Imported "${fileName}"`, 'success');
-        await readDatabase(fileName);
+        if (result.isBatchImport && Array.isArray(result.notes)) {
+            // Save assets to savesDir/assets if present
+            if (Array.isArray(result.assets) && result.assets.length > 0) {
+                const assetsDir = path.join(savesDir, 'assets');
+                if (!fs.existsSync(assetsDir)) {
+                    await fsPromises.mkdir(assetsDir, { recursive: true });
+                }
+                for (const asset of result.assets) {
+                    const fileName = asset.fileName || (asset.relPath ? path.basename(asset.relPath) : null);
+                    let uint8 = null;
+                    if (asset.bytes instanceof Uint8Array || Array.isArray(asset.bytes)) {
+                        uint8 = asset.bytes instanceof Uint8Array ? asset.bytes : new Uint8Array(asset.bytes);
+                    } else if (typeof asset.dataBase64 === 'string') {
+                        const binStr = atob(asset.dataBase64);
+                        uint8 = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) {
+                            uint8[i] = binStr.charCodeAt(i);
+                        }
+                    }
+                    if (fileName && uint8) {
+                        const assetPath = path.join(assetsDir, fileName);
+                        await fsPromises.writeFile(assetPath, uint8);
+                    }
+                }
+            }
+
+            // Determine or create vault folder
+            let folderId = targetFolderId;
+            if (!folderId && result.defaultFolder && typeof createVaultFolder === 'function') {
+                const existing = Array.isArray(vaultFolders) ? vaultFolders.find(f => f.name.toLowerCase() === result.defaultFolder.toLowerCase()) : null;
+                if (existing) {
+                    folderId = existing.id;
+                } else {
+                    const created = await createVaultFolder(result.defaultFolder);
+                    if (created) folderId = created.id;
+                }
+            }
+
+            let firstSavedNote = null;
+            for (const note of result.notes) {
+                let noteTitle = sanitizeNoteTitleToFileName(note.title || note.fileName) || 'Imported Note';
+                let noteContent = note.html || note.content || '';
+                if (!noteContent && note.rawMarkdown && typeof markdownToNoshHtml === 'function') {
+                    noteContent = markdownToNoshHtml(note.rawMarkdown);
+                } else if (!noteContent && note.rawHtml) {
+                    noteContent = note.rawHtml;
+                }
+
+                const probe = document.createElement('div');
+                probe.innerHTML = noteContent;
+                if (probe.firstElementChild && probe.firstElementChild.tagName === 'H1') {
+                    probe.firstElementChild.textContent = noteTitle;
+                } else {
+                    const h1 = document.createElement('h1');
+                    h1.textContent = noteTitle;
+                    probe.insertBefore(h1, probe.firstChild);
+                }
+                noteContent = probe.innerHTML;
+
+                let uniqueTitle = noteTitle;
+                let counter = 1;
+                while (fs.existsSync(path.join(savesDir, `${uniqueTitle}.nsh`))) {
+                    uniqueTitle = `${noteTitle} (${counter++})`;
+                }
+                const notePath = path.join(savesDir, `${uniqueTitle}.nsh`);
+                await fsPromises.writeFile(notePath, noteContent, 'utf8');
+
+                if (folderId && typeof moveNoteToFolder === 'function') {
+                    await moveNoteToFolder(uniqueTitle, folderId);
+                }
+
+                if (!firstSavedNote) {
+                    firstSavedNote = uniqueTitle;
+                }
+            }
+
+            if (typeof renderSidebarNotesList === 'function') {
+                await renderSidebarNotesList();
+            }
+
+            if (firstSavedNote) {
+                await readDatabase(firstSavedNote);
+            }
+
+            showToast(`Successfully imported ${result.notes.length} notes!`, 'success');
+            return true;
+        }
+
+        // Single Note Import
+        if ((result.fileName || result.title) && (result.content !== undefined || result.html !== undefined || result.rawMarkdown !== undefined)) {
+            let baseName = sanitizeNoteTitleToFileName(result.title || result.fileName) || 'Imported Note';
+            let noteContent = result.html !== undefined ? result.html : (result.content !== undefined ? result.content : '');
+            if (!noteContent && result.rawMarkdown && typeof markdownToNoshHtml === 'function') {
+                noteContent = markdownToNoshHtml(result.rawMarkdown);
+            }
+
+            const probe = document.createElement('div');
+            probe.innerHTML = noteContent;
+            if (probe.firstElementChild && probe.firstElementChild.tagName === 'H1') {
+                const headerTitle = sanitizeNoteTitleToFileName(probe.firstElementChild.textContent || '');
+                if (headerTitle) {
+                    baseName = headerTitle;
+                }
+                probe.firstElementChild.textContent = baseName;
+            } else {
+                const h1 = document.createElement('h1');
+                h1.textContent = baseName;
+                probe.insertBefore(h1, probe.firstChild);
+            }
+            noteContent = probe.innerHTML;
+
+            let uniqueTitle = baseName;
+            let counter = 1;
+            while (fs.existsSync(path.join(savesDir, `${uniqueTitle}.nsh`))) {
+                uniqueTitle = `${baseName} (${counter++})`;
+            }
+
+            const destPath = path.join(savesDir, `${uniqueTitle}.nsh`);
+            await fsPromises.writeFile(destPath, noteContent, 'utf8');
+
+            let folderId = targetFolderId;
+            if (!folderId && result.targetFolder && typeof createVaultFolder === 'function') {
+                const existing = Array.isArray(vaultFolders) ? vaultFolders.find(f => f.name.toLowerCase() === result.targetFolder.toLowerCase()) : null;
+                if (existing) {
+                    folderId = existing.id;
+                } else {
+                    const created = await createVaultFolder(result.targetFolder);
+                    if (created) folderId = created.id;
+                }
+            }
+
+            if (folderId && typeof moveNoteToFolder === 'function') {
+                await moveNoteToFolder(uniqueTitle, folderId);
+            }
+
+            if (typeof renderSidebarNotesList === 'function') {
+                await renderSidebarNotesList();
+            }
+
+            await readDatabase(uniqueTitle);
+            showToast(`Imported "${uniqueTitle}"`, 'success');
+            return true;
+        }
     } catch (err) {
-        console.error('Error importing file:', err);
-        showToast('Failed to import file', 'error');
+        console.error('Error in handleImportResult:', err);
+        showToast('Failed to import file: ' + (err.message || 'Unknown error'), 'error');
     }
+    return false;
+}
+
+// Open File Dialog with format filter ('md', 'pdf', 'pptx', 'notion', 'all')
+async function openImportDialog(filterType = 'all', targetFolderId = null) {
+    try {
+        const result = await ipcRenderer.invoke('open-file-dialog', { filterType });
+        if (!result) return;
+        await handleImportResult(result, targetFolderId);
+    } catch (err) {
+        console.error('Error invoking open-file-dialog:', err);
+        showToast('Import dialog failed', 'error');
+    }
+}
+window.openImportDialog = openImportDialog;
+window.handleImportResult = handleImportResult;
+
+// Native Open File
+async function openFileFromSystem() {
+    await openImportDialog('all');
 }
 
 ipcRenderer.on('open-nsh-file', async (event, fileData) => {
@@ -492,11 +684,348 @@ async function exportToPdf() {
     }
 }
 
+// =========================================================================
+// Non-Deletable First <h1> Header & Two-Way File Name Synchronization
+// =========================================================================
+let headerSyncTimer = null;
+let headerSyncPromise = null;
+
+function sanitizeNoteTitleToFileName(rawText) {
+    if (!rawText) return '';
+    return String(rawText)
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/[\/\\:*?"<>|]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+}
+
+function ensureNoteFirstHeader(editorEl = content, fallbackTitle = activeNoteName, syncTextToFallback = false) {
+    if (!editorEl || !activeNoteName) return null;
+    if (editorEl.getAttribute('contenteditable') === 'false') return null;
+
+    const titleFallback = sanitizeNoteTitleToFileName(fallbackTitle || activeNoteName) || 'Untitled';
+    let firstEl = editorEl.firstElementChild;
+
+    // Remove stray leading empty text nodes
+    while (editorEl.firstChild && editorEl.firstChild.nodeType === Node.TEXT_NODE && !editorEl.firstChild.nodeValue.trim()) {
+        editorEl.removeChild(editorEl.firstChild);
+    }
+    // If a stray leading text node has content before any element, wrap it in <h1>
+    if (editorEl.firstChild && editorEl.firstChild.nodeType === Node.TEXT_NODE && editorEl.firstChild.nodeValue.trim()) {
+        const textVal = editorEl.firstChild.nodeValue.trim();
+        const h1 = document.createElement('h1');
+        h1.textContent = textVal;
+        editorEl.replaceChild(h1, editorEl.firstChild);
+        firstEl = h1;
+    }
+
+    if (!firstEl || firstEl.tagName !== 'H1') {
+        const h1 = document.createElement('h1');
+        h1.textContent = titleFallback;
+        h1.setAttribute('data-placeholder', titleFallback);
+        editorEl.insertBefore(h1, editorEl.firstChild);
+        firstEl = h1;
+    } else {
+        firstEl.setAttribute('data-placeholder', titleFallback);
+        if (syncTextToFallback) {
+            const currentHeaderTitle = sanitizeNoteTitleToFileName(firstEl.textContent || '');
+            if (!currentHeaderTitle || currentHeaderTitle !== titleFallback) {
+                firstEl.textContent = titleFallback;
+            }
+        }
+    }
+
+    // Ensure there is always at least one editable body block after the first <h1>
+    if (editorEl.children.length === 1) {
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        editorEl.appendChild(p);
+    }
+
+    return firstEl;
+}
+
+function updateLiveNoteTitleUI(displayTitle) {
+    const clean = sanitizeNoteTitleToFileName(displayTitle) || activeNoteName || 'Untitled';
+    if (typeof textTitle !== 'undefined' && textTitle) textTitle.textContent = clean;
+    if (typeof activeDocTitle !== 'undefined' && activeDocTitle) activeDocTitle.textContent = clean;
+    const activeNoteEl = document.getElementById('status-active-note');
+    if (activeNoteEl) activeNoteEl.textContent = clean;
+
+    if (activeNoteName) {
+        document.querySelectorAll('.save').forEach(saveEl => {
+            if (saveEl.getAttribute('data-file') === activeNoteName) {
+                const titleEl = saveEl.querySelector('.save-title');
+                if (titleEl) titleEl.textContent = clean;
+            }
+        });
+    }
+}
+
+async function syncFirstHeaderToNoteName(options = {}) {
+    if (headerSyncPromise) {
+        try {
+            await headerSyncPromise;
+        } catch (_) {}
+    }
+    headerSyncPromise = _doSyncFirstHeaderToNoteName(options);
+    try {
+        return await headerSyncPromise;
+    } finally {
+        headerSyncPromise = null;
+    }
+}
+
+async function _doSyncFirstHeaderToNoteName({ immediate = false, restoreIfEmpty = false, allowUniqueSuffix = false } = {}) {
+    if (!activeNoteName || !content || content.getAttribute('contenteditable') === 'false') {
+        return activeNoteName;
+    }
+    if (headerSyncTimer) {
+        clearTimeout(headerSyncTimer);
+        headerSyncTimer = null;
+    }
+
+    const firstH1 = ensureNoteFirstHeader(content, activeNoteName, false);
+    if (!firstH1) return activeNoteName;
+
+    const rawHeaderText = firstH1.textContent || '';
+    const sanitized = sanitizeNoteTitleToFileName(rawHeaderText);
+
+    if (!sanitized) {
+        if (restoreIfEmpty) {
+            firstH1.textContent = activeNoteName;
+            firstH1.setAttribute('data-placeholder', activeNoteName);
+            updateLiveNoteTitleUI(activeNoteName);
+        } else {
+            updateLiveNoteTitleUI(activeNoteName);
+        }
+        return activeNoteName;
+    }
+
+    if (sanitized === activeNoteName) {
+        firstH1.setAttribute('data-placeholder', activeNoteName);
+        updateLiveNoteTitleUI(activeNoteName);
+        return activeNoteName;
+    }
+
+    if (typeof renameActiveNoteFromHeader === 'function') {
+        const finalName = await renameActiveNoteFromHeader(activeNoteName, sanitized, { allowUniqueSuffix });
+        if (finalName) {
+            firstH1.setAttribute('data-placeholder', finalName);
+            if (finalName !== sanitized && allowUniqueSuffix) {
+                firstH1.textContent = finalName;
+            }
+            updateLiveNoteTitleUI(finalName);
+        }
+        return finalName;
+    }
+
+    return activeNoteName;
+}
+
+function scheduleFirstHeaderSync(delayMs = 450) {
+    if (!activeNoteName || !content) return;
+    const firstH1 = content.firstElementChild;
+    if (firstH1 && firstH1.tagName === 'H1') {
+        const previewTitle = sanitizeNoteTitleToFileName(firstH1.textContent || '');
+        updateLiveNoteTitleUI(previewTitle || activeNoteName);
+    }
+    if (headerSyncTimer) {
+        clearTimeout(headerSyncTimer);
+    }
+    headerSyncTimer = setTimeout(() => {
+        syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: false, allowUniqueSuffix: false });
+    }, delayMs);
+}
+
+function isCaretAtStartOfElement(el, range) {
+    if (!el || !range || !range.collapsed) return false;
+    const testRange = document.createRange();
+    testRange.selectNodeContents(el);
+    testRange.setEnd(range.startContainer, range.startOffset);
+    return testRange.toString().length === 0;
+}
+
+function isCaretAtEndOfElement(el, range) {
+    if (!el || !range || !range.collapsed) return false;
+    const testRange = document.createRange();
+    testRange.selectNodeContents(el);
+    testRange.setStart(range.endContainer, range.endOffset);
+    return testRange.toString().length === 0;
+}
+
+function placeCaretInElement(el, atStart = true) {
+    if (!el) return;
+    try {
+        const sel = window.getSelection();
+        if (!sel) return;
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        r.collapse(atStart);
+        sel.removeAllRanges();
+        sel.addRange(r);
+    } catch (_) {}
+}
+
+function setupFirstHeaderProtection() {
+    if (!content || content.dataset.firstHeaderProtected) return;
+    content.dataset.firstHeaderProtected = 'true';
+
+    content.addEventListener('keydown', (e) => {
+        if (!activeNoteName || content.getAttribute('contenteditable') === 'false') return;
+        const firstH1 = ensureNoteFirstHeader(content, activeNoteName, false);
+        if (!firstH1) return;
+
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+
+        const startInH1 = firstH1.contains(range.startContainer) || (range.startContainer === content && range.startOffset === 0);
+        const endInH1 = firstH1.contains(range.endContainer) || (range.endContainer === content && range.endOffset <= 1);
+        const touchesH1 = startInH1 || endInH1 || range.intersectsNode(firstH1);
+
+        // Enter inside first <h1> -> move to body paragraph below and sync filename immediately
+        if (e.key === 'Enter' && !e.shiftKey && startInH1 && endInH1) {
+            e.preventDefault();
+            let nextEl = firstH1.nextElementSibling;
+            if (!nextEl || nextEl.getAttribute('contenteditable') === 'false' || nextEl.tagName === 'TABLE') {
+                nextEl = document.createElement('p');
+                nextEl.innerHTML = '<br>';
+                firstH1.after(nextEl);
+            }
+            placeCaretInElement(nextEl, true);
+            syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: true, allowUniqueSuffix: true });
+            triggerAutoSave();
+            return;
+        }
+
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+            const h1Text = firstH1.textContent || '';
+
+            // Case 1: Multi-block selection spanning first <h1> and subsequent blocks (e.g. Ctrl+A + Backspace/Delete)
+            if (!range.collapsed && touchesH1 && !(startInH1 && endInH1)) {
+                e.preventDefault();
+                // Preserve first <h1> (cannot be deleted) and remove selected content after first <h1>
+                const tailRange = document.createRange();
+                if (firstH1.nextSibling) {
+                    tailRange.setStartBefore(firstH1.nextSibling);
+                    tailRange.setEnd(range.endContainer, range.endOffset);
+                    tailRange.deleteContents();
+                }
+                if (!firstH1.textContent.trim()) {
+                    firstH1.textContent = activeNoteName;
+                }
+                if (content.children.length === 1) {
+                    const p = document.createElement('p');
+                    p.innerHTML = '<br>';
+                    content.appendChild(p);
+                }
+                placeCaretInElement(firstH1.nextElementSibling || firstH1, true);
+                triggerAutoSave();
+                return;
+            }
+
+            // Case 2: Selection is entirely inside first <h1>
+            if (startInH1 && endInH1) {
+                if (!range.collapsed) {
+                    const selectedLen = range.toString().length;
+                    if (selectedLen >= h1Text.length) {
+                        e.preventDefault();
+                        firstH1.innerHTML = '';
+                        placeCaretInElement(firstH1, true);
+                        scheduleFirstHeaderSync();
+                        triggerAutoSave();
+                        return;
+                    }
+                } else if (e.key === 'Backspace') {
+                    if (h1Text.length === 0 || isCaretAtStartOfElement(firstH1, range)) {
+                        e.preventDefault();
+                        return;
+                    }
+                    if (h1Text.length === 1) {
+                        e.preventDefault();
+                        firstH1.innerHTML = '';
+                        placeCaretInElement(firstH1, true);
+                        scheduleFirstHeaderSync();
+                        triggerAutoSave();
+                        return;
+                    }
+                } else if (e.key === 'Delete') {
+                    if (isCaretAtEndOfElement(firstH1, range)) {
+                        // Prevent pulling next block into the first <h1>
+                        e.preventDefault();
+                        return;
+                    }
+                    if (h1Text.length === 1 && isCaretAtStartOfElement(firstH1, range)) {
+                        e.preventDefault();
+                        firstH1.innerHTML = '';
+                        placeCaretInElement(firstH1, true);
+                        scheduleFirstHeaderSync();
+                        triggerAutoSave();
+                        return;
+                    }
+                }
+            }
+
+            // Case 3: Backspace at the very start of the element immediately after first <h1>
+            if (e.key === 'Backspace' && range.collapsed && !startInH1) {
+                let topBlock = range.startContainer;
+                while (topBlock && topBlock !== content && topBlock.parentNode !== content) {
+                    topBlock = topBlock.parentNode;
+                }
+                if (topBlock && topBlock === firstH1.nextElementSibling && isCaretAtStartOfElement(topBlock, range)) {
+                    e.preventDefault();
+                    const blockEmpty = (topBlock.textContent || '').trim() === '' &&
+                        !topBlock.querySelector?.('img, video, table, .code-block-wrapper, .math-formula-block, .claude-embedded-diagram, .checklist-checkbox');
+                    if (blockEmpty && content.children.length > 2) {
+                        topBlock.remove();
+                    }
+                    placeCaretInElement(firstH1, false);
+                    return;
+                }
+            }
+        }
+    });
+
+    content.addEventListener('cut', (e) => {
+        if (!activeNoteName || content.getAttribute('contenteditable') === 'false') return;
+        const firstH1 = content.firstElementChild;
+        if (!firstH1 || firstH1.tagName !== 'H1') return;
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        if (!range.collapsed && range.intersectsNode(firstH1)) {
+            setTimeout(() => {
+                ensureNoteFirstHeader(content, activeNoteName, false);
+                scheduleFirstHeaderSync();
+            }, 0);
+        }
+    });
+
+    content.addEventListener('blur', () => {
+        if (!activeNoteName || content.getAttribute('contenteditable') === 'false') return;
+        syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: true, allowUniqueSuffix: true });
+    });
+}
+
+setupFirstHeaderProtection();
+window.ensureNoteFirstHeader = ensureNoteFirstHeader;
+window.syncFirstHeaderToNoteName = syncFirstHeaderToNoteName;
+window.sanitizeNoteTitleToFileName = sanitizeNoteTitleToFileName;
+
 // Change Tracking & Auto-Save
 let autoSaveTimer = null;
 
 function triggerAutoSave() {
     if (!activeNoteName) return;
+
+    if (typeof ensureNoteFirstHeader === 'function') {
+        ensureNoteFirstHeader(content, activeNoteName, false);
+    }
+    if (typeof scheduleFirstHeaderSync === 'function') {
+        scheduleFirstHeaderSync(450);
+    }
 
     if (!hasUnsavedChanges) {
         hasUnsavedChanges = true;
@@ -1063,6 +1592,22 @@ function htmlToMarkdown(elementOrHtml) {
                 return `\n\`\`\`${lang}\n${code}\n\`\`\`\n\n`;
             }
 
+            // Math Formula Block / Inline
+            if (node.classList.contains('math-formula-block')) {
+                const latex = node.getAttribute('data-latex') || node.textContent.trim();
+                return `\n\`\`\`latex\n${latex}\n\`\`\`\n\n`;
+            }
+            if (node.classList.contains('math-formula-inline')) {
+                const latex = node.getAttribute('data-latex') || node.textContent.trim();
+                return `$${latex}$`;
+            }
+
+            // Claude Embedded Diagram Block
+            if (node.classList.contains('claude-embedded-diagram')) {
+                const cap = node.getAttribute('data-diagram-caption') || node.querySelector('.claude-diagram-caption')?.textContent?.trim() || 'diagram';
+                return `\n[embedded content: ${cap}]\n\n`;
+            }
+
             // Checklist Item
             if (node.classList.contains('checklist-item')) {
                 const isChecked = node.querySelector('.checklist-checkbox')?.checked || node.querySelector('.checklist-checkbox')?.hasAttribute('checked');
@@ -1076,6 +1621,29 @@ function htmlToMarkdown(elementOrHtml) {
                 return `[[${noteName}]]`;
             }
 
+            // GFM Table
+            if (tag === 'table') {
+                const rows = Array.from(node.querySelectorAll('tr'));
+                if (rows.length === 0) return '';
+                const matrix = rows.map(row =>
+                    Array.from(row.querySelectorAll('th, td')).map(cell => {
+                        let cellMd = '';
+                        cell.childNodes.forEach(ch => { cellMd += parseNode(ch); });
+                        return cellMd.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
+                    })
+                );
+                const colCount = Math.max(...matrix.map(r => r.length), 1);
+                const padRow = (r) => {
+                    const copy = r.slice();
+                    while (copy.length < colCount) copy.push('');
+                    return `| ${copy.join(' | ')} |`;
+                };
+                const headerLine = padRow(matrix[0]);
+                const sepLine = `| ${Array(colCount).fill('---').join(' | ')} |`;
+                const bodyLines = matrix.slice(1).map(padRow);
+                return `\n${[headerLine, sepLine, ...bodyLines].join('\n')}\n\n`;
+            }
+
             let inner = '';
             node.childNodes.forEach(child => {
                 inner += parseNode(child);
@@ -1086,6 +1654,8 @@ function htmlToMarkdown(elementOrHtml) {
                 case 'h2': return `## ${inner.trim()}\n\n`;
                 case 'h3': return `### ${inner.trim()}\n\n`;
                 case 'h4': return `#### ${inner.trim()}\n\n`;
+                case 'h5': return `##### ${inner.trim()}\n\n`;
+                case 'h6': return `###### ${inner.trim()}\n\n`;
                 case 'p': return `${inner.trim()}\n\n`;
                 case 'strong':
                 case 'b': return `**${inner}**`;
@@ -1094,6 +1664,7 @@ function htmlToMarkdown(elementOrHtml) {
                 case 'u': return `<u>${inner}</u>`;
                 case 'strike':
                 case 's': return `~~${inner}~~`;
+                case 'code': return `\`${inner}\``;
                 case 'a': {
                     const href = node.getAttribute('href') || '';
                     return `[${inner}](${href})`;
@@ -1104,9 +1675,24 @@ function htmlToMarkdown(elementOrHtml) {
                     return `![${alt}](${src})\n\n`;
                 }
                 case 'ul': return `${inner}\n`;
-                case 'ol': return `${inner}\n`;
+                case 'ol': {
+                    let idx = 1;
+                    let olOut = '';
+                    node.childNodes.forEach(ch => {
+                        if (ch.nodeType === Node.ELEMENT_NODE && ch.tagName.toLowerCase() === 'li') {
+                            let liInner = '';
+                            ch.childNodes.forEach(c => { liInner += parseNode(c); });
+                            olOut += `${idx}. ${liInner.trim()}\n`;
+                            idx++;
+                        }
+                    });
+                    return `${olOut}\n`;
+                }
                 case 'li': return `- ${inner.trim()}\n`;
-                case 'blockquote': return `> ${inner.trim()}\n\n`;
+                case 'blockquote': {
+                    const qLines = inner.trim().split(/\r?\n/).map(l => `> ${l}`).join('\n');
+                    return `${qLines}\n\n`;
+                }
                 case 'hr': return `---\n\n`;
                 case 'br': return '\n';
                 case 'div': return inner ? `${inner}\n` : '';
@@ -1318,107 +1904,1183 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Drag and Drop File Import (.md, .txt, .html, .nsh)
+// ==========================================================================
+// Markdown & Claude Smart Paste / Import Engine
+// ==========================================================================
+
+function renderClaudeEmbeddedDiagram(rawCaption) {
+    const caption = String(rawCaption || '').trim();
+    const norm = caption.toLowerCase();
+    let svgMarkup = '';
+
+    if (norm.includes('soru 2') && (norm.includes('üçgen') || norm.includes('iki eksenli') || norm.includes('e_n'))) {
+        // Soru 2: 5 triangular membership functions (NB, NK, S, PK, PB) with dual X-axes (e_N in [-1, 1] and e in [-8, +8] °C with 17 ticks)
+        const eTicks = [];
+        for (let k = 0; k <= 16; k++) {
+            const val = -8 + k;
+            const x = 90 + k * 37.5;
+            const isMajor = val % 4 === 0;
+            const label = val > 0 ? `+${val}` : `${val}`;
+            eTicks.push(`
+                <line x1="${x}" y1="252" x2="${x}" y2="${isMajor ? 261 : 257}" stroke="var(--text-secondary, #475569)" stroke-width="${isMajor ? 1.6 : 1}" />
+                <text x="${x}" y="${isMajor ? 276 : 274}" text-anchor="middle" font-size="${isMajor ? 11.5 : 9.5}" font-weight="${isMajor ? 700 : 400}" fill="var(--text-primary, #1e293b)" opacity="${isMajor ? 1 : 0.78}">${label}</text>
+            `);
+        }
+
+        svgMarkup = `
+        <svg viewBox="0 0 760 315" xmlns="http://www.w3.org/2000/svg" style="font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+            <!-- Horizontal grid lines -->
+            <line x1="90" y1="45" x2="690" y2="45" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="4,4" stroke-width="1" />
+            <line x1="90" y1="120" x2="690" y2="120" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="5,4" stroke-width="1.2" />
+            <!-- Vertical peak guides -->
+            <line x1="90" y1="45" x2="90" y2="252" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="3,3" stroke-width="1" />
+            <line x1="240" y1="45" x2="240" y2="252" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="3,3" stroke-width="1" />
+            <line x1="390" y1="45" x2="390" y2="252" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="3,3" stroke-width="1" />
+            <line x1="540" y1="45" x2="540" y2="252" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="3,3" stroke-width="1" />
+            <line x1="690" y1="45" x2="690" y2="252" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="3,3" stroke-width="1" />
+
+            <!-- Y-Axis (μ) -->
+            <line x1="90" y1="30" x2="90" y2="195" stroke="var(--text-primary, #1e293b)" stroke-width="1.6" />
+            <text x="78" y="49" text-anchor="end" font-size="11.5" font-weight="600" fill="var(--text-primary, #1e293b)">1.0</text>
+            <text x="78" y="124" text-anchor="end" font-size="11.5" font-weight="600" fill="var(--text-secondary, #475569)">0.5</text>
+            <text x="78" y="198" text-anchor="end" font-size="11.5" font-weight="600" fill="var(--text-primary, #1e293b)">0.0</text>
+            <text x="46" y="120" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text-primary, #1e293b)">μ</text>
+
+            <!-- 5 Triangular Membership Functions -->
+            <!-- NB: (-1, 1) to (-0.5, 0) -->
+            <polygon points="90,195 90,45 240,195" fill="rgba(239, 68, 68, 0.10)" />
+            <polyline points="90,195 90,45 240,195" fill="none" stroke="#ef4444" stroke-width="2.6" stroke-linejoin="round" />
+            <text x="108" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#ef4444">NB</text>
+
+            <!-- NK: (-1, 0) -> (-0.5, 1) -> (0, 0) -->
+            <polygon points="90,195 240,45 390,195" fill="rgba(245, 158, 11, 0.10)" />
+            <polyline points="90,195 240,45 390,195" fill="none" stroke="#f59e0b" stroke-width="2.6" stroke-linejoin="round" />
+            <text x="240" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#f59e0b">NK</text>
+
+            <!-- S: (-0.5, 0) -> (0, 1) -> (+0.5, 0) -->
+            <polygon points="240,195 390,45 540,195" fill="rgba(16, 185, 129, 0.10)" />
+            <polyline points="240,195 390,45 540,195" fill="none" stroke="#10b981" stroke-width="2.6" stroke-linejoin="round" />
+            <text x="390" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#10b981">S</text>
+
+            <!-- PK: (0, 0) -> (+0.5, 1) -> (+1, 0) -->
+            <polygon points="390,195 540,45 690,195" fill="rgba(59, 130, 246, 0.10)" />
+            <polyline points="390,195 540,45 690,195" fill="none" stroke="#3b82f6" stroke-width="2.6" stroke-linejoin="round" />
+            <text x="540" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#3b82f6">PK</text>
+
+            <!-- PB: (+0.5, 0) -> (+1, 1) -->
+            <polygon points="540,195 690,45 690,195" fill="rgba(139, 92, 246, 0.10)" />
+            <polyline points="540,195 690,45 690,195" fill="none" stroke="#8b5cf6" stroke-width="2.6" stroke-linejoin="round" />
+            <text x="674" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="#8b5cf6">PB</text>
+
+            <!-- Intersection points at μ = 0.5 -->
+            <circle cx="165" cy="120" r="4" fill="var(--text-primary, #1e293b)" />
+            <circle cx="315" cy="120" r="4" fill="var(--text-primary, #1e293b)" />
+            <circle cx="465" cy="120" r="4" fill="var(--text-primary, #1e293b)" />
+            <circle cx="615" cy="120" r="4" fill="var(--text-primary, #1e293b)" />
+
+            <!-- Axis 1: e_N (Normalized Error) -->
+            <line x1="90" y1="195" x2="705" y2="195" stroke="var(--text-primary, #1e293b)" stroke-width="1.8" />
+            <line x1="90" y1="195" x2="90" y2="203" stroke="var(--text-primary, #1e293b)" stroke-width="1.6" />
+            <line x1="240" y1="195" x2="240" y2="203" stroke="var(--text-primary, #1e293b)" stroke-width="1.6" />
+            <line x1="390" y1="195" x2="390" y2="203" stroke="var(--text-primary, #1e293b)" stroke-width="1.6" />
+            <line x1="540" y1="195" x2="540" y2="203" stroke="var(--text-primary, #1e293b)" stroke-width="1.6" />
+            <line x1="690" y1="195" x2="690" y2="203" stroke="var(--text-primary, #1e293b)" stroke-width="1.6" />
+            <text x="90" y="219" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">−1</text>
+            <text x="240" y="219" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">−0.5</text>
+            <text x="390" y="219" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">0</text>
+            <text x="540" y="219" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">+0.5</text>
+            <text x="690" y="219" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">+1</text>
+            <text x="728" y="200" text-anchor="start" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">e_N</text>
+            <text x="45" y="218" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">(Normalize)</text>
+
+            <!-- Axis 2: e (°C) (Real Error, 17 ticks from -8 to +8) -->
+            <line x1="90" y1="252" x2="705" y2="252" stroke="var(--text-secondary, #475569)" stroke-width="1.5" />
+            ${eTicks.join('')}
+            <text x="716" y="256" text-anchor="start" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">e (°C)</text>
+            <text x="45" y="274" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">(Gerçek)</text>
+            <text x="390" y="302" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--text-secondary, #475569)">du_e = 1/8  ⟹  e_N = e / 8   (Her 1 °C = 17 tık ile işaretlenmiştir)</text>
+        </svg>`;
+    } else if (norm.includes('soru 2') && (norm.includes('denetleme') || norm.includes('blok diyagram'))) {
+        // Soru 2: Closed-loop fuzzy temperature control block diagram
+        svgMarkup = `
+        <svg viewBox="0 0 760 205" xmlns="http://www.w3.org/2000/svg" style="font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+            <defs>
+                <marker id="nosh-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                    <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="var(--text-primary, #1e293b)" />
+                </marker>
+            </defs>
+
+            <!-- Input T_ref -->
+            <line x1="28" y1="78" x2="82" y2="78" stroke="var(--text-primary, #1e293b)" stroke-width="2" marker-end="url(#nosh-arrow)" />
+            <text x="52" y="66" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">T_ref</text>
+            <text x="76" y="70" text-anchor="end" font-size="14" font-weight="800" fill="#ef4444">−</text>
+
+            <!-- Summing Junction Σ -->
+            <circle cx="104" cy="78" r="19" fill="var(--bg-card, #ffffff)" stroke="var(--text-primary, #1e293b)" stroke-width="2" />
+            <text x="104" y="83" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text-primary, #1e293b)">Σ</text>
+            <text x="118" y="114" text-anchor="start" font-size="13" font-weight="800" fill="#10b981">+</text>
+
+            <!-- Signal e = T_oda - T_ref -->
+            <line x1="123" y1="78" x2="218" y2="78" stroke="var(--text-primary, #1e293b)" stroke-width="2" marker-end="url(#nosh-arrow)" />
+            <text x="170" y="64" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--text-primary, #1e293b)">e = T_oda − T_ref</text>
+            <text x="170" y="96" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">[−8, +8] °C</text>
+
+            <!-- Scaling Block du_e -->
+            <rect x="222" y="48" width="112" height="60" rx="8" fill="rgba(99, 102, 241, 0.12)" stroke="#6366f1" stroke-width="2" />
+            <text x="278" y="74" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">du_e = 1 / 8</text>
+            <text x="278" y="93" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">Ölçekleme</text>
+
+            <!-- Signal e_N -->
+            <line x1="334" y1="78" x2="404" y2="78" stroke="var(--text-primary, #1e293b)" stroke-width="2" marker-end="url(#nosh-arrow)" />
+            <text x="369" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">e_N</text>
+            <text x="369" y="96" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">[−1, 1]</text>
+
+            <!-- Fuzzy Controller Block -->
+            <rect x="408" y="44" width="144" height="68" rx="8" fill="rgba(16, 185, 129, 0.12)" stroke="#10b981" stroke-width="2" />
+            <text x="480" y="73" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">Bulanık Denetleyici</text>
+            <text x="480" y="93" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">{NB, NK, S, PK, PB}</text>
+
+            <!-- Control Signal u -->
+            <line x1="552" y1="78" x2="594" y2="78" stroke="var(--text-primary, #1e293b)" stroke-width="2" marker-end="url(#nosh-arrow)" />
+            <text x="573" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text-primary, #1e293b)">u</text>
+
+            <!-- Room / Plant Block -->
+            <rect x="598" y="48" width="102" height="60" rx="8" fill="rgba(245, 158, 11, 0.12)" stroke="#f59e0b" stroke-width="2" />
+            <text x="649" y="74" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">Oda / Sistem</text>
+            <text x="649" y="93" text-anchor="middle" font-size="10.5" fill="var(--text-secondary, #475569)">Isıl Süreç</text>
+
+            <!-- Output T_oda -->
+            <line x1="700" y1="78" x2="748" y2="78" stroke="var(--text-primary, #1e293b)" stroke-width="2" marker-end="url(#nosh-arrow)" />
+            <text x="728" y="64" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">T_oda</text>
+
+            <!-- Feedback Loop -->
+            <circle cx="718" cy="78" r="3.5" fill="var(--text-primary, #1e293b)" />
+            <polyline points="718,78 718,162 104,162 104,101" fill="none" stroke="var(--text-primary, #1e293b)" stroke-width="1.8" marker-end="url(#nosh-arrow)" />
+            <text x="411" y="182" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-secondary, #475569)">Ölçülen Oda Sıcaklığı Geri Beslemesi (T_oda)</text>
+        </svg>`;
+    } else if (norm.includes('soru 3')) {
+        // Soru 3: Genç (□ solid), Erişkin (○ dashed), Yaşlı (△ dotted) over X = {10, 20, ..., 90}
+        const xs = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+        const genc = [1.0, 1.0, 0.8, 0.5, 0.2, 0.1, 0.0, 0.0, 0.0];
+        const eriskin = [0.0, 0.0, 0.2, 0.5, 0.8, 1.0, 1.0, 1.0, 1.0];
+        const yasli = [0.0, 0.0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.0];
+        const xCoord = (i) => 85 + i * 70;
+        const yCoord = (mu) => 235 - mu * 185;
+
+        const yLevels = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0];
+        const hGrid = yLevels.map(mu => {
+            const y = yCoord(mu);
+            return `
+                <line x1="85" y1="${y}" x2="645" y2="${y}" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="${mu === 0.5 || mu === 1.0 ? '4,3' : '2,3'}" stroke-width="${mu === 0 ? 1.6 : 1}" />
+                <text x="73" y="${y + 4}" text-anchor="end" font-size="11" font-weight="${mu === 0.5 || mu === 1.0 || mu === 0 ? 700 : 500}" fill="var(--text-primary, #1e293b)">${mu.toFixed(1)}</text>
+            `;
+        }).join('');
+
+        const vGrid = xs.map((val, i) => {
+            const x = xCoord(i);
+            return `
+                <line x1="${x}" y1="50" x2="${x}" y2="235" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="2,3" stroke-width="1" />
+                <line x1="${x}" y1="235" x2="${x}" y2="242" stroke="var(--text-primary, #1e293b)" stroke-width="1.5" />
+                <text x="${x}" y="258" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--text-primary, #1e293b)">${val}</text>
+            `;
+        }).join('');
+
+        const gencPts = genc.map((m, i) => `${xCoord(i)},${yCoord(m)}`).join(' ');
+        const eriskinPts = eriskin.map((m, i) => `${xCoord(i)},${yCoord(m)}`).join(' ');
+        const yasliPts = yasli.map((m, i) => `${xCoord(i)},${yCoord(m)}`).join(' ');
+
+        const gencMarkers = genc.map((m, i) => `<rect x="${xCoord(i) - 4}" y="${yCoord(m) - 4}" width="8" height="8" fill="#3b82f6" stroke="var(--bg-card, #ffffff)" stroke-width="1.2" />`).join('');
+        const eriskinMarkers = eriskin.map((m, i) => `<circle cx="${xCoord(i)}" cy="${yCoord(m)}" r="4.5" fill="#10b981" stroke="var(--bg-card, #ffffff)" stroke-width="1.2" />`).join('');
+        const yasliMarkers = yasli.map((m, i) => {
+            const cx = xCoord(i), cy = yCoord(m);
+            return `<polygon points="${cx},${cy - 5.5} ${cx - 5},${cy + 4} ${cx + 5},${cy + 4}" fill="#f59e0b" stroke="var(--bg-card, #ffffff)" stroke-width="1.1" />`;
+        }).join('');
+
+        svgMarkup = `
+        <svg viewBox="0 0 760 295" xmlns="http://www.w3.org/2000/svg" style="font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+            ${hGrid}
+            ${vGrid}
+            <!-- Axes -->
+            <line x1="85" y1="40" x2="85" y2="235" stroke="var(--text-primary, #1e293b)" stroke-width="1.8" />
+            <line x1="85" y1="235" x2="665" y2="235" stroke="var(--text-primary, #1e293b)" stroke-width="1.8" />
+            <text x="42" y="142" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">μ(x)</text>
+            <text x="365" y="282" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary, #1e293b)">Yaş Evrensel Kümesi X = {10, 20, 30, 40, 50, 60, 70, 80, 90}</text>
+
+            <!-- Curves -->
+            <polyline points="${gencPts}" fill="none" stroke="#3b82f6" stroke-width="2.6" stroke-linejoin="round" />
+            <polyline points="${eriskinPts}" fill="none" stroke="#10b981" stroke-width="2.6" stroke-dasharray="8,4" stroke-linejoin="round" />
+            <polyline points="${yasliPts}" fill="none" stroke="#f59e0b" stroke-width="2.6" stroke-dasharray="3,3" stroke-linejoin="round" />
+
+            <!-- Markers -->
+            ${gencMarkers}
+            ${eriskinMarkers}
+            ${yasliMarkers}
+
+            <!-- Intersection callout at (40, 0.5) -->
+            <circle cx="${xCoord(3)}" cy="${yCoord(0.5)}" r="7" fill="none" stroke="var(--text-primary, #1e293b)" stroke-width="1.4" stroke-dasharray="2,2" />
+            <text x="${xCoord(3) - 10}" y="${yCoord(0.5) - 10}" text-anchor="end" font-size="10.5" font-weight="600" fill="var(--text-primary, #1e293b)">(40, 0.5) kesişim</text>
+
+            <!-- Legend -->
+            <rect x="210" y="10" width="350" height="26" rx="6" fill="var(--bg-card, #ffffff)" stroke="var(--border-medium, #cbd5e1)" stroke-width="1" />
+            <line x1="224" y1="23" x2="248" y2="23" stroke="#3b82f6" stroke-width="2.6" />
+            <rect x="232" y="19" width="8" height="8" fill="#3b82f6" />
+            <text x="254" y="27" font-size="11.5" font-weight="700" fill="#3b82f6">Genç (□ düz)</text>
+
+            <line x1="340" y1="23" x2="364" y2="23" stroke="#10b981" stroke-width="2.6" stroke-dasharray="6,3" />
+            <circle cx="352" cy="23" r="4" fill="#10b981" />
+            <text x="370" y="27" font-size="11.5" font-weight="700" fill="#10b981">Erişkin (○ kesikli)</text>
+
+            <line x1="478" y1="23" x2="502" y2="23" stroke="#f59e0b" stroke-width="2.6" stroke-dasharray="2.5,2.5" />
+            <polygon points="490,18 485,27 495,27" fill="#f59e0b" />
+            <text x="508" y="27" font-size="11.5" font-weight="700" fill="#f59e0b">Yaşlı (△ noktalı)</text>
+        </svg>`;
+    } else if (norm.includes('soru 4')) {
+        // Soru 4: Two separate coordinate planes side by side:
+        // Left: Birleşim Genç ∪ Yaşlı (max) -> [1, 1, 0.8, 0.5, 0.4, 0.6, 0.8, 1, 1]
+        // Right: Kesişim Genç ∩ Yaşlı (min) -> [0, 0, 0.1, 0.2, 0.2, 0.1, 0, 0, 0]
+        const xs = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+        const genc = [1.0, 1.0, 0.8, 0.5, 0.2, 0.1, 0.0, 0.0, 0.0];
+        const yasli = [0.0, 0.0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.0];
+        const unionVals = [1.0, 1.0, 0.8, 0.5, 0.4, 0.6, 0.8, 1.0, 1.0];
+        const interVals = [0.0, 0.0, 0.1, 0.2, 0.2, 0.1, 0.0, 0.0, 0.0];
+
+        const buildPanel = (offsetX, title, accentColor, resultVals, calloutText, calloutIdx, calloutMu) => {
+            const xP = (i) => offsetX + 42 + i * 35;
+            const yP = (mu) => 225 - mu * 160;
+            const yTicks = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0];
+
+            const gridH = yTicks.map(mu => `
+                <line x1="${xP(0)}" y1="${yP(mu)}" x2="${xP(8)}" y2="${yP(mu)}" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="2,3" stroke-width="0.9" />
+                <text x="${xP(0) - 7}" y="${yP(mu) + 3.5}" text-anchor="end" font-size="9.5" font-weight="600" fill="var(--text-secondary, #475569)">${mu.toFixed(1)}</text>
+            `).join('');
+
+            const gridV = xs.map((v, i) => `
+                <line x1="${xP(i)}" y1="${yP(1)}" x2="${xP(i)}" y2="${yP(0)}" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="2,3" stroke-width="0.8" />
+                <text x="${xP(i)}" y="242" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary, #1e293b)">${v}</text>
+            `).join('');
+
+            const gencLine = genc.map((m, i) => `${xP(i)},${yP(m)}`).join(' ');
+            const yasliLine = yasli.map((m, i) => `${xP(i)},${yP(m)}`).join(' ');
+            const resLine = resultVals.map((m, i) => `${xP(i)},${yP(m)}`).join(' ');
+            const polyFill = `${xP(0)},${yP(0)} ${resLine} ${xP(8)},${yP(0)}`;
+            const dots = resultVals.map((m, i) => `<circle cx="${xP(i)}" cy="${yP(m)}" r="3.8" fill="${accentColor}" stroke="var(--bg-card, #ffffff)" stroke-width="1" />`).join('');
+
+            return `
+                <text x="${offsetX + 182}" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="${accentColor}">${title}</text>
+                <text x="${offsetX + 182}" y="42" text-anchor="middle" font-size="10" fill="var(--text-secondary, #475569)">Kesikli: Genç &amp; Yaşlı referans · Kalın düz: Sonuç kümesi</text>
+                ${gridH}
+                ${gridV}
+                <line x1="${xP(0)}" y1="55" x2="${xP(0)}" y2="225" stroke="var(--text-primary, #1e293b)" stroke-width="1.5" />
+                <line x1="${xP(0)}" y1="225" x2="${xP(8) + 12}" y2="225" stroke="var(--text-primary, #1e293b)" stroke-width="1.5" />
+                <polygon points="${polyFill}" fill="${accentColor}" fill-opacity="0.11" />
+                <polyline points="${gencLine}" fill="none" stroke="#3b82f6" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.55" />
+                <polyline points="${yasliLine}" fill="none" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="3,3" opacity="0.55" />
+                <polyline points="${resLine}" fill="none" stroke="${accentColor}" stroke-width="3" stroke-linejoin="round" />
+                ${dots}
+                <text x="${xP(calloutIdx)}" y="${yP(calloutMu) - 10}" text-anchor="middle" font-size="10" font-weight="700" fill="${accentColor}">${calloutText}</text>
+                <text x="${offsetX + 182}" y="262" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-secondary, #475569)">Yaş (x)</text>
+            `;
+        };
+
+        svgMarkup = `
+        <svg viewBox="0 0 760 275" xmlns="http://www.w3.org/2000/svg" style="font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+            ${buildPanel(10, 'Birleşim: μ_{Genç ∪ Yaşlı}(x) = max', '#8b5cf6', unionVals, 'Vadi (50, 0.4)', 4, 0.4)}
+            <line x1="382" y1="18" x2="382" y2="262" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="4,4" stroke-width="1" />
+            ${buildPanel(392, 'Kesişim: μ_{Genç ∩ Yaşlı}(x) = min', '#ec4899', interVals, 'Plato (40–50, 0.2)', 3.5, 0.2)}
+        </svg>`;
+    } else {
+        svgMarkup = `
+        <svg viewBox="0 0 600 70" xmlns="http://www.w3.org/2000/svg" style="font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+            <rect x="8" y="8" width="584" height="54" rx="8" fill="none" stroke="var(--border-medium, #cbd5e1)" stroke-dasharray="5,4" stroke-width="1.5" />
+            <text x="300" y="39" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--text-primary, #1e293b)">${escapeHtml(caption)}</text>
+        </svg>`;
+    }
+
+    return `<div class="claude-embedded-diagram" contenteditable="false" data-diagram-caption="${escapeHtml(caption)}">${svgMarkup}<div class="claude-diagram-caption"><span>📊</span><span>${escapeHtml(caption)}</span></div></div>`;
+}
+
+function decodeMarkdownEntities(str) {
+    return String(str || '')
+        .replace(/&#91;/g, '[')
+        .replace(/&#93;/g, ']')
+        .replace(/&#40;/g, '(')
+        .replace(/&#41;/g, ')')
+        .replace(/&#42;/g, '*')
+        .replace(/&#95;/g, '_')
+        .replace(/&#124;/g, '|')
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+}
+
+function parseInlineMarkdown(rawText) {
+    if (!rawText) return '';
+    let text = String(rawText);
+
+    const codeTokens = [];
+    const mathTokens = [];
+    const linkTokens = [];
+    const escTokens = [];
+
+    // 1. Protect inline code spans `...`
+    text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+        const idx = codeTokens.length;
+        codeTokens.push(`<code class="inline-code">${escapeHtml(decodeMarkdownEntities(code))}</code>`);
+        return `\x00CODE_${idx}\x00`;
+    });
+
+    // 2. Protect inline LaTeX math \(...\) and $...$ (when non-space and not currency)
+    text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, latex) => {
+        const idx = mathTokens.length;
+        if (typeof createMathFormulaElement === 'function') {
+            mathTokens.push(createMathFormulaElement(latex.trim(), false).outerHTML);
+        } else {
+            mathTokens.push(`<span class="math-formula-inline" data-latex="${escapeHtml(latex.trim())}">${escapeHtml(latex.trim())}</span>`);
+        }
+        return `\x00MATH_${idx}\x00`;
+    });
+
+    text = text.replace(/(^|[^\\$])\$([^\s$](?:[^$\n]*?[^\s$])?)\$(?!\d)/g, (full, prefix, latex) => {
+        // Only treat $...$ as math if it looks like math (contains backslash, ^, _, =, or Greek/math symbols)
+        if (!/\\[a-zA-Z]+|[_^{}=<>±×÷∑∏√∞]/.test(latex)) {
+            return full;
+        }
+        const idx = mathTokens.length;
+        if (typeof createMathFormulaElement === 'function') {
+            mathTokens.push(createMathFormulaElement(latex.trim(), false).outerHTML);
+        } else {
+            mathTokens.push(`<span class="math-formula-inline" data-latex="${escapeHtml(latex.trim())}">${escapeHtml(latex.trim())}</span>`);
+        }
+        return `${prefix}\x00MATH_${idx}\x00`;
+    });
+
+    // 3. Protect internal wiki-links [[Note Title]]
+    text = text.replace(/\[\[([^\[\]\n]+)\]\]/g, (_, noteName) => {
+        const cleanNote = escapeHtml(decodeMarkdownEntities(noteName.trim()));
+        const idx = linkTokens.length;
+        linkTokens.push(`<span class="note-internal-link" data-note="${cleanNote}" contenteditable="false"><iconify-icon icon="solar:link-minimalistic-2-linear"></iconify-icon> ${cleanNote}</span>`);
+        return `\x00LINK_${idx}\x00`;
+    });
+
+    // 4. Protect Markdown images ![alt](src) and links [label](url) (only when not preceded by backslash)
+    text = text.replace(/(^|[^\\])!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, prefix, alt, src) => {
+        const idx = linkTokens.length;
+        linkTokens.push(`<img src="${escapeHtml(src)}" alt="${escapeHtml(decodeMarkdownEntities(alt))}">`);
+        return `${prefix}\x00LINK_${idx}\x00`;
+    });
+    text = text.replace(/(^|[^\\])\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g, (_, prefix, label, href) => {
+        const idx = linkTokens.length;
+        linkTokens.push(`<a href="${escapeHtml(href)}">${parseInlineMarkdown(label)}</a>`);
+        return `${prefix}\x00LINK_${idx}\x00`;
+    });
+
+    // 5. Decode HTML entities (such as &#91; and &#93;) before protecting backslash escapes
+    text = decodeMarkdownEntities(text);
+
+    // 6. Protect Markdown backslash-escaped punctuation (\_, \*, \[, \], \|, \~)
+    // Preserve \[...\] ONLY if it contains real LaTeX commands like \frac or \mu
+    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (full, inner) => {
+        if (/\\[a-zA-Z]+/.test(inner) && !/^embedded\s+content\s*:/i.test(inner.trim())) {
+            const idx = mathTokens.length;
+            if (typeof createMathFormulaElement === 'function') {
+                mathTokens.push(createMathFormulaElement(inner.trim(), false).outerHTML);
+            } else {
+                mathTokens.push(`<span class="math-formula-inline" data-latex="${escapeHtml(inner.trim())}">${escapeHtml(inner.trim())}</span>`);
+            }
+            return `\x00MATH_${idx}\x00`;
+        }
+        const i1 = escTokens.length;
+        escTokens.push('[');
+        const i2 = escTokens.length;
+        escTokens.push(']');
+        return `\x00ESC_${i1}\x00${inner}\x00ESC_${i2}\x00`;
+    });
+
+    text = text.replace(/\\([_*[\]()|~`\\])/g, (_, ch) => {
+        const idx = escTokens.length;
+        escTokens.push(escapeHtml(ch));
+        return `\x00ESC_${idx}\x00`;
+    });
+
+    // 7. Escape HTML special characters on remaining plain text
+    text = escapeHtml(text);
+
+    // 8. Apply bold, italic, and strikethrough
+    text = text.replace(/\*\*\*([^\n*]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    text = text.replace(/\*\*([^\n*]+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__([^\n_]+?)__/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^\s*](?:[^\n*]*?[^\s*])?)\*/g, '<em>$1</em>');
+    text = text.replace(/(^|[\s(])_([^\s_](?:[^\n_]*?[^\s_])?)_(?=$|[\s.,;:!?)])/g, '$1<em>$2</em>');
+    text = text.replace(/~~([^\n~]+?)~~/g, '<s>$1</s>');
+
+    // 9. Restore escaped characters, links, math, and inline code
+    text = text.replace(/\x00ESC_(\d+)\x00/g, (_, idx) => escTokens[Number(idx)] ?? '');
+    text = text.replace(/\x00LINK_(\d+)\x00/g, (_, idx) => linkTokens[Number(idx)] ?? '');
+    text = text.replace(/\x00MATH_(\d+)\x00/g, (_, idx) => mathTokens[Number(idx)] ?? '');
+    text = text.replace(/\x00CODE_(\d+)\x00/g, (_, idx) => codeTokens[Number(idx)] ?? '');
+
+    return text;
+}
+
+function splitMarkdownTableRow(rowLine) {
+    let s = rowLine.trim();
+    if (s.startsWith('|')) s = s.slice(1);
+    if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1);
+    const cells = [];
+    let cur = '';
+    for (let i = 0; i < s.length; i++) {
+        if (s[i] === '\\' && i + 1 < s.length && s[i + 1] === '|') {
+            cur += '|';
+            i++;
+        } else if (s[i] === '|') {
+            cells.push(cur.trim());
+            cur = '';
+        } else {
+            cur += s[i];
+        }
+    }
+    cells.push(cur.trim());
+    return cells;
+}
+
+function isMarkdownTableSeparator(line) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('|') || !trimmed.includes('-')) return false;
+    const cells = splitMarkdownTableRow(trimmed);
+    return cells.length > 0 && cells.every(c => /^:?-{2,}:?$/.test(c.trim()));
+}
+
+function buildCodeBlockHtmlString(code, rawLang) {
+    const cleanLang = (rawLang || 'javascript').trim().toLowerCase();
+    if (['latex', 'tex', 'math', 'katex'].includes(cleanLang)) {
+        if (typeof createMathFormulaElement === 'function') {
+            return createMathFormulaElement(code.trim(), true).outerHTML;
+        }
+        return `<div class="math-formula-block" contenteditable="false" data-latex="${escapeHtml(code.trim())}" data-display-mode="true">${escapeHtml(code.trim())}</div>`;
+    }
+    if (typeof buildCodeBlockElement === 'function') {
+        const wrapper = buildCodeBlockElement(code, cleanLang);
+        return wrapper.outerHTML;
+    }
+    const langMeta = typeof getLanguageMeta === 'function'
+        ? getLanguageMeta(cleanLang)
+        : { name: cleanLang, mode: cleanLang, icon: 'solar:code-square-linear' };
+    return `
+        <div class="code-block-wrapper" contenteditable="false">
+            <div class="code-block-header">
+                <div class="code-header-left">
+                    <div class="code-window-dots">
+                        <span class="code-dot red"></span>
+                        <span class="code-dot yellow"></span>
+                        <span class="code-dot green"></span>
+                    </div>
+                    <span class="code-lang-tag clickable" onclick="openBlockLangSwitcher(this)">
+                        <iconify-icon class="lang-icon" icon="${langMeta.icon}"></iconify-icon>
+                        <span class="lang-name">${langMeta.name}</span>
+                        <iconify-icon class="lang-caret" icon="solar:alt-arrow-down-linear"></iconify-icon>
+                    </span>
+                </div>
+                <div class="code-block-actions">
+                    <button class="code-action-btn wrap-btn" onclick="toggleCodeWrap(this)">Wrap</button>
+                    <button class="code-action-btn copy-btn" onclick="copyCodeSnippet(this)">Copy</button>
+                    <button class="code-action-btn delete" onclick="deleteCodeBlock(this)"><iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon></button>
+                </div>
+            </div>
+            <textarea class="code" language="${langMeta.mode}" data-label="${langMeta.name}" style="display:block;">${escapeHtml(code)}</textarea>
+        </div>
+    `.trim();
+}
+
+function extractEmbeddedContentCaption(line) {
+    const decoded = decodeMarkdownEntities(line.trim())
+        .replace(/^\\\[/, '[')
+        .replace(/\\\]$/, ']')
+        .replace(/\\([_*[\]()|~`\\])/g, '$1');
+    const match = decoded.match(/^\[embedded\s+content:\s*([\s\S]+?)\]$/i);
+    return match ? match[1].trim() : null;
+}
+
+function markdownToNoshHtml(mdText) {
+    if (!mdText) return '';
+    const lines = String(mdText).replace(/\r\n?/g, '\n').split('\n');
+    const htmlParts = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // 1. Blank line
+        if (!trimmed) {
+            i++;
+            continue;
+        }
+
+        // 2. Fenced Code or Math Block (```lang ... ```)
+        const fenceMatch = trimmed.match(/^(`{3,}|~{3,})(.*)$/);
+        if (fenceMatch) {
+            const fenceToken = fenceMatch[1];
+            const fenceChar = fenceToken[0];
+            const langSpec = (fenceMatch[2] || '').trim().split(/\s+/)[0] || '';
+            const codeLines = [];
+            i++;
+            while (i < lines.length) {
+                const closeTrim = lines[i].trim();
+                if (closeTrim.startsWith(fenceChar.repeat(fenceToken.length)) && closeTrim.replace(new RegExp(`\\\${fenceChar}`, 'g'), '').trim() === '') {
+                    i++;
+                    break;
+                }
+                codeLines.push(lines[i]);
+                i++;
+            }
+            htmlParts.push(buildCodeBlockHtmlString(codeLines.join('\n'), langSpec));
+            continue;
+        }
+
+        // 3. Standalone Display Math Block ($ ... $ or \[ ... \])
+        if (trimmed.startsWith('$')) {
+            if (trimmed.endsWith('$') && trimmed.length > 4) {
+                const inner = trimmed.slice(2, -2).trim();
+                htmlParts.push(buildCodeBlockHtmlString(inner, 'latex'));
+                i++;
+                continue;
+            }
+            const mathLines = [trimmed.slice(2)];
+            i++;
+            while (i < lines.length) {
+                if (lines[i].trim().endsWith('$')) {
+                    mathLines.push(lines[i].trim().slice(0, -2));
+                    i++;
+                    break;
+                }
+                mathLines.push(lines[i]);
+                i++;
+            }
+            htmlParts.push(buildCodeBlockHtmlString(mathLines.join('\n').trim(), 'latex'));
+            continue;
+        }
+
+        // 4. Claude Embedded Content Placeholder ([embedded content: ...] or &#91;embedded content: ...\])
+        const embeddedCaption = extractEmbeddedContentCaption(trimmed);
+        if (embeddedCaption) {
+            htmlParts.push(renderClaudeEmbeddedDiagram(embeddedCaption));
+            i++;
+            continue;
+        }
+
+        // 5. Horizontal Rule (---, ***, ___)
+        if (/^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$/.test(trimmed)) {
+            htmlParts.push('<hr>');
+            i++;
+            continue;
+        }
+
+        // 6. ATX Headings (# H1 .. ###### H6)
+        const headingMatch = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (headingMatch) {
+            const level = Math.min(headingMatch[1].length, 6);
+            htmlParts.push(`<h${level}>${parseInlineMarkdown(headingMatch[2])}</h${level}>`);
+            i++;
+            continue;
+        }
+
+        // 7. GFM Table (| Header | ... followed by | --- | ...)
+        if (trimmed.startsWith('|') && i + 1 < lines.length && isMarkdownTableSeparator(lines[i + 1])) {
+            const headerCells = splitMarkdownTableRow(lines[i]);
+            const sepCells = splitMarkdownTableRow(lines[i + 1]);
+            const aligns = sepCells.map(c => {
+                const s = c.trim();
+                if (s.startsWith(':') && s.endsWith(':')) return 'center';
+                if (s.endsWith(':')) return 'right';
+                return 'left';
+            });
+            i += 2;
+            const bodyRows = [];
+            while (i < lines.length && lines[i].trim().startsWith('|')) {
+                if (!isMarkdownTableSeparator(lines[i])) {
+                    bodyRows.push(splitMarkdownTableRow(lines[i]));
+                }
+                i++;
+            }
+            const thHtml = headerCells.map((cell, idx) => {
+                const align = aligns[idx] && aligns[idx] !== 'left' ? ` style="text-align:${aligns[idx]}"` : '';
+                return `<th${align}>${parseInlineMarkdown(cell)}</th>`;
+            }).join('');
+            const tbodyHtml = bodyRows.map(row => {
+                const tds = headerCells.map((_, idx) => {
+                    const align = aligns[idx] && aligns[idx] !== 'left' ? ` style="text-align:${aligns[idx]}"` : '';
+                    return `<td${align}>${parseInlineMarkdown(row[idx] ?? '')}</td>`;
+                }).join('');
+                return `<tr>${tds}</tr>`;
+            }).join('');
+            htmlParts.push(`<div class="table-container"><table><thead><tr>${thHtml}</tr></thead><tbody>${tbodyHtml}</tbody></table></div>`);
+            continue;
+        }
+
+        // 8. Blockquote and Callouts (> ...)
+        if (/^\s*>\s?/.test(line)) {
+            const quoteLines = [];
+            while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+                quoteLines.push(lines[i].replace(/^\s*>\s?/, ''));
+                i++;
+            }
+
+            const firstLine = quoteLines[0] || '';
+            const gfmMatch = firstLine.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|HINT|QUESTION|SUCCESS|FAILURE|DANGER|BUG|EXAMPLE|QUOTE)\]\s*(.*)$/i);
+            const trMatch = firstLine.match(/^\s*\*\*(Dikkat|Uyarı|Sık\s+yapılan\s+hata|Not|Önemli|Bilgi|İpucu|Warning|Note|Caution):\*\*\s*(.*)$/i);
+
+            if (gfmMatch) {
+                const rawType = gfmMatch[1].toLowerCase();
+                const typeMap = {
+                    note: 'info', info: 'info', hint: 'info', question: 'info', example: 'info',
+                    tip: 'tip', success: 'tip',
+                    warning: 'warning', important: 'warning',
+                    caution: 'danger', danger: 'danger', failure: 'danger', bug: 'danger',
+                    quote: 'info'
+                };
+                const iconMap = {
+                    info: 'solar:info-circle-bold',
+                    tip: 'solar:check-circle-bold',
+                    warning: 'solar:danger-triangle-bold',
+                    danger: 'solar:shield-warning-bold'
+                };
+                const cType = typeMap[rawType] || 'info';
+                const cIcon = iconMap[cType] || 'solar:info-circle-bold';
+                const cTitle = gfmMatch[2].trim() || gfmMatch[1].toUpperCase();
+
+                const remainingLines = quoteLines.slice(1);
+                const bodyHtml = remainingLines.map(ql => ql.trim() ? parseInlineMarkdown(ql) : '<br>').join('<br>');
+                htmlParts.push(`
+                    <blockquote class="callout-box callout-${cType}">
+                        <div class="callout-header"><iconify-icon icon="${cIcon}"></iconify-icon> <strong>${escapeHtml(cTitle)}</strong></div>
+                        <div class="callout-body">${bodyHtml || parseInlineMarkdown(cTitle)}</div>
+                    </blockquote>
+                `.trim());
+                continue;
+            } else if (trMatch) {
+                const rawWord = trMatch[1].toLowerCase().replace(/\s+/g, ' ');
+                let cType = 'info';
+                let cIcon = 'solar:info-circle-bold';
+                if (rawWord.includes('hata') || rawWord.includes('caution') || rawWord.includes('danger')) {
+                    cType = 'danger';
+                    cIcon = 'solar:shield-warning-bold';
+                } else if (rawWord.includes('dikkat') || rawWord.includes('uyarı') || rawWord.includes('warning') || rawWord.includes('önemli')) {
+                    cType = 'warning';
+                    cIcon = 'solar:danger-triangle-bold';
+                } else if (rawWord.includes('ipucu') || rawWord.includes('tip') || rawWord.includes('bilgi')) {
+                    cType = 'tip';
+                    cIcon = 'solar:check-circle-bold';
+                }
+
+                const title = trMatch[1];
+                const firstRest = trMatch[2].trim();
+                const otherLines = quoteLines.slice(1);
+                const allBody = (firstRest ? [firstRest] : []).concat(otherLines);
+                const bodyHtml = allBody.map(ql => ql.trim() ? parseInlineMarkdown(ql) : '<br>').join('<br>');
+
+                htmlParts.push(`
+                    <blockquote class="callout-box callout-${cType}">
+                        <div class="callout-header"><iconify-icon icon="${cIcon}"></iconify-icon> <strong>${escapeHtml(title)}</strong></div>
+                        <div class="callout-body">${bodyHtml}</div>
+                    </blockquote>
+                `.trim());
+                continue;
+            }
+
+            const renderedQuote = quoteLines
+                .map(ql => ql.trim() ? parseInlineMarkdown(ql) : '<br>')
+                .join('<br>');
+            htmlParts.push(`<blockquote>${renderedQuote}</blockquote>`);
+            continue;
+        }
+
+        // 9. Checklist item (- [ ] or - [x])
+        const checkMatch = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/);
+        if (checkMatch) {
+            const checked = checkMatch[1].toLowerCase() === 'x';
+            htmlParts.push(
+                `<div class="checklist-item${checked ? ' completed' : ''}" contenteditable="false">` +
+                `<input type="checkbox" class="checklist-checkbox"${checked ? ' checked="checked"' : ''} onchange="toggleChecklistItem(this)">` +
+                `<span class="checklist-text" contenteditable="true">${parseInlineMarkdown(checkMatch[2])}</span>` +
+                `</div>`
+            );
+            i++;
+            continue;
+        }
+
+        // 10. Nested or flat list (Unordered & Ordered)
+        const listMatch = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+        if (listMatch) {
+            const listItems = [];
+            while (i < lines.length) {
+                const curLine = lines[i];
+                const m = curLine.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+                if (!m) break;
+                if (/^\s*[-*+]\s+\[[ xX]\]/.test(curLine)) break;
+                listItems.push({
+                    indent: m[1].length,
+                    isOrdered: /^\d/.test(m[2]),
+                    text: parseInlineMarkdown(m[3])
+                });
+                i++;
+            }
+
+            function renderNestedList(items) {
+                if (items.length === 0) return '';
+                const isOrdered = items[0].isOrdered;
+                const tag = isOrdered ? 'ol' : 'ul';
+                let out = `<${tag}>`;
+                let idx = 0;
+                while (idx < items.length) {
+                    const cur = items[idx];
+                    const baseIndent = cur.indent;
+                    idx++;
+                    const children = [];
+                    while (idx < items.length && items[idx].indent > baseIndent) {
+                        children.push(items[idx]);
+                        idx++;
+                    }
+                    out += `<li>${cur.text}`;
+                    if (children.length > 0) {
+                        out += renderNestedList(children);
+                    }
+                    out += `</li>`;
+                }
+                out += `</${tag}>`;
+                return out;
+            }
+
+            htmlParts.push(renderNestedList(listItems));
+            continue;
+        }
+
+        // 11. Standard Paragraph (merge consecutive plain lines unless next line starts a block construct)
+        const paraLines = [];
+        while (
+            i < lines.length &&
+            lines[i].trim() !== '' &&
+            !/^(`{3,}|~{3,})/.test(lines[i].trim()) &&
+            !lines[i].trim().startsWith('$') &&
+            !extractEmbeddedContentCaption(lines[i].trim()) &&
+            !/^(?:-\s*){3,}$|^(?:\*\s*){3,}$|^(?:_\s*){3,}$/.test(lines[i].trim()) &&
+            !/^\s*#{1,6}\s+/.test(lines[i]) &&
+            !(lines[i].trim().startsWith('|') && i + 1 < lines.length && isMarkdownTableSeparator(lines[i + 1])) &&
+            !/^\s*>\s?/.test(lines[i]) &&
+            !/^\s*[-*+]\s+/.test(lines[i]) &&
+            !/^\s*\d+[.)]\s+/.test(lines[i])
+        ) {
+            paraLines.push(parseInlineMarkdown(lines[i].trim()));
+            i++;
+        }
+        if (paraLines.length > 0) {
+            htmlParts.push(`<p>${paraLines.join('<br>')}</p>`);
+        } else {
+            i++;
+        }
+    }
+
+    return htmlParts.join('\n');
+}
+
+function isMarkdownContent(text) {
+    if (!text || typeof text !== 'string') return false;
+    const s = text.replace(/\r\n?/g, '\n').trim();
+    if (!s) return false;
+
+    // Strong single-line or multi-line Markdown indicators
+    if (/^#{1,6}\s+\S/m.test(s)) return true;
+    if (/^(`{3,}|~{3,})\w*/m.test(s)) return true;
+    if (/^\|.+\|\s*\n\s*\|[\s:|-]+\|/m.test(s)) return true;
+    if (/(?:&#91;|\\?\[)embedded\s+content:/i.test(s)) return true;
+    if (/^\s*[-*+]\s+\[[ xX]\]\s+/m.test(s)) return true;
+
+    let signals = 0;
+    if (/\*\*[^*\n]+\*\*/.test(s)) signals++;
+    if (/^\s*>\s+\S/m.test(s)) signals++;
+    if (/^\s*[-*+]\s+\S/m.test(s)) signals++;
+    if (/^\s*\d+\.\s+\S/m.test(s)) signals++;
+    if (/^(?:-\s*){3,}$/m.test(s)) signals++;
+    if (/\\[_*[\]]/.test(s)) signals++;
+    return signals >= 2;
+}
+
+function sanitizeAndConvertPastedHtml(rawHtml, fallbackText = '') {
+    if (!rawHtml || !rawHtml.trim()) return '';
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawHtml, 'text/html');
+    const body = doc.body;
+    if (!body) return '';
+
+    // Remove script, style, meta, link, button, svg copy buttons from web UIs
+    body.querySelectorAll('script, style, meta, link, button, noscript, iframe').forEach(el => el.remove());
+
+    // Convert KaTeX elements from web pages (e.g. claude.ai) into Nosh math elements
+    body.querySelectorAll('.katex-display, .katex, span[data-math], math').forEach(mathNode => {
+        if (!mathNode.isConnected) return;
+        const annotation = mathNode.querySelector('annotation[encoding="application/x-tex"]') || mathNode.querySelector('annotation');
+        const latex = (annotation ? annotation.textContent : mathNode.getAttribute('data-math') || mathNode.getAttribute('data-latex') || '').trim();
+        if (latex) {
+            const isDisplay = mathNode.classList.contains('katex-display') || mathNode.tagName.toLowerCase() === 'div' || Boolean(mathNode.closest('.katex-display'));
+            const htmlStr = isDisplay
+                ? buildCodeBlockHtmlString(latex, 'latex')
+                : (typeof createMathFormulaElement === 'function' ? createMathFormulaElement(latex, false).outerHTML : `<span class="math-formula-inline" data-latex="${escapeHtml(latex)}">${escapeHtml(latex)}</span>`);
+            const temp = doc.createElement('div');
+            temp.innerHTML = htmlStr;
+            const target = mathNode.closest('.katex-display') || mathNode;
+            if (temp.firstElementChild && target.parentNode) {
+                target.replaceWith(temp.firstElementChild);
+            }
+        }
+    });
+
+    // Convert <pre> blocks into Nosh code blocks or math blocks
+    body.querySelectorAll('pre').forEach(pre => {
+        if (!pre.isConnected || pre.closest('.code-block-wrapper')) return;
+        const codeEl = pre.querySelector('code');
+        const classAttr = ((codeEl && codeEl.className) || pre.className || '').toLowerCase();
+        const langMatch = classAttr.match(/(?:language-|lang-)([a-z0-9_+-]+)/i);
+        const lang = langMatch ? langMatch[1] : 'javascript';
+        const codeText = (codeEl ? codeEl.textContent : pre.textContent) || '';
+        const temp = doc.createElement('div');
+        temp.innerHTML = buildCodeBlockHtmlString(codeText.replace(/\n$/, ''), lang);
+        if (temp.firstElementChild) {
+            pre.replaceWith(temp.firstElementChild);
+        }
+    });
+
+    // Convert inline <code> tags & [embedded content: ...] paragraphs
+    body.querySelectorAll('code').forEach(codeEl => {
+        if (codeEl.closest('pre, .code-block-wrapper')) return;
+        codeEl.classList.add('inline-code');
+        codeEl.removeAttribute('style');
+    });
+
+    body.querySelectorAll('p, div').forEach(el => {
+        if (!el.isConnected) return;
+        if (el.children.length === 0) {
+            const cap = extractEmbeddedContentCaption(el.textContent || '');
+            if (cap) {
+                const temp = doc.createElement('div');
+                temp.innerHTML = renderClaudeEmbeddedDiagram(cap);
+                if (temp.firstElementChild) {
+                    el.replaceWith(temp.firstElementChild);
+                }
+            }
+        }
+    });
+
+    // Strip foreign inline styles (color, background, font-family) from pasted web elements
+    body.querySelectorAll('*').forEach(el => {
+        if (el.closest('.code-block-wrapper, .math-formula-block, .math-formula-inline, .claude-embedded-diagram')) return;
+        if (el.hasAttribute('style')) {
+            const align = el.style && el.style.textAlign;
+            el.removeAttribute('style');
+            if (align && (el.tagName === 'TH' || el.tagName === 'TD')) {
+                el.style.textAlign = align;
+            }
+        }
+        el.removeAttribute('class');
+    });
+
+    return body.innerHTML.trim();
+}
+
+function isUntouchedPlaceholderNote(editorEl) {
+    if (!editorEl) return false;
+    const text = (editorEl.innerText || '').trim();
+    return /^Untitled\s*\d*\s*\n+Start writing your note or insert code blocks\.{3}$/i.test(text);
+}
+
+function insertHtmlNodesIntoEditor(htmlString) {
+    const editorEl = document.getElementById('content');
+    if (!editorEl || !htmlString) return false;
+
+    const temp = document.createElement('div');
+    temp.innerHTML = htmlString;
+    const nodes = Array.from(temp.childNodes).filter(n => {
+        return !(n.nodeType === Node.TEXT_NODE && !n.nodeValue.trim());
+    });
+    if (nodes.length === 0) return false;
+
+    const hasBlockElements = nodes.some(n =>
+        n.nodeType === Node.ELEMENT_NODE &&
+        /^(H[1-6]|TABLE|DIV|UL|OL|BLOCKQUOTE|HR|PRE)$/.test(n.tagName)
+    ) || nodes.length > 1;
+
+    // If the note is a brand-new untouched "Untitled X" note with default placeholder text
+    if (isUntouchedPlaceholderNote(editorEl) && hasBlockElements) {
+        const startsWithH1 = nodes[0].nodeType === Node.ELEMENT_NODE && nodes[0].tagName === 'H1';
+        if (startsWithH1) {
+            editorEl.innerHTML = '';
+        } else {
+            const placeholderP = editorEl.querySelector('p');
+            if (placeholderP) placeholderP.remove();
+        }
+        let lastNode = null;
+        nodes.forEach(node => {
+            editorEl.appendChild(node);
+            lastNode = node;
+        });
+        finalizeEditorPaste(editorEl, lastNode);
+        return true;
+    }
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorEl.contains(sel.anchorNode)) {
+        let lastNode = null;
+        nodes.forEach(node => {
+            editorEl.appendChild(node);
+            lastNode = node;
+        });
+        finalizeEditorPaste(editorEl, lastNode);
+        return true;
+    }
+
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) {
+        range.deleteContents();
+    }
+
+    // Single inline paragraph paste into an existing text container
+    if (!hasBlockElements && nodes.length === 1 && nodes[0].nodeName === 'P') {
+        const frag = document.createDocumentFragment();
+        let lastInline = null;
+        while (nodes[0].firstChild) {
+            lastInline = nodes[0].firstChild;
+            frag.appendChild(lastInline);
+        }
+        range.insertNode(frag);
+        if (lastInline) {
+            const newRange = document.createRange();
+            newRange.setStartAfter(lastInline);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+        }
+        finalizeEditorPaste(editorEl, null);
+        return true;
+    }
+
+    // Block-level paste: find direct child of #content containing the caret
+    let topBlock = range.startContainer;
+    while (topBlock && topBlock !== editorEl && topBlock.parentNode !== editorEl) {
+        topBlock = topBlock.parentNode;
+    }
+
+    const frag = document.createDocumentFragment();
+    let lastNode = null;
+    nodes.forEach(node => {
+        lastNode = node;
+        frag.appendChild(node);
+    });
+
+    if (!topBlock || topBlock === editorEl) {
+        if ((editorEl.innerText || '').trim() === '' && !editorEl.querySelector('img, video, table, .code-block-wrapper, .math-formula-block')) {
+            editorEl.innerHTML = '';
+        }
+        editorEl.appendChild(frag);
+    } else {
+        const blockEmpty = (topBlock.innerText || '').trim() === '' &&
+            !topBlock.querySelector?.('img, video, table, .code-block-wrapper, .math-formula-block, .claude-embedded-diagram');
+        if (blockEmpty) {
+            topBlock.replaceWith(frag);
+        } else {
+            topBlock.after(frag);
+        }
+    }
+
+    finalizeEditorPaste(editorEl, lastNode);
+    return true;
+}
+
+function finalizeEditorPaste(editorEl, lastNode) {
+    if (lastNode && lastNode.isConnected) {
+        try {
+            const sel = window.getSelection();
+            const r = document.createRange();
+            if (lastNode.nodeType === Node.ELEMENT_NODE && lastNode.getAttribute('contenteditable') === 'false') {
+                const trailingP = document.createElement('p');
+                trailingP.innerHTML = '<br>';
+                lastNode.after(trailingP);
+                r.setStart(trailingP, 0);
+            } else {
+                r.selectNodeContents(lastNode);
+                r.collapse(false);
+            }
+            sel.removeAllRanges();
+            sel.addRange(r);
+        } catch (_) {}
+    }
+
+    if (typeof ensureNoteFirstHeader === 'function') ensureNoteFirstHeader(editorEl, activeNoteName, false);
+    if (typeof syncFirstHeaderToNoteName === 'function') {
+        syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: false, allowUniqueSuffix: true });
+    }
+    if (typeof turnToCode === 'function') turnToCode();
+    if (typeof processMathFormulas === 'function') processMathFormulas(editorEl);
+    if (typeof processChecklists === 'function') processChecklists();
+    if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
+    if (typeof populateDocumentOutline === 'function') populateDocumentOutline();
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+}
+
+function handleSmartEditorPaste({ text = '', html = '', plainOnly = false } = {}) {
+    const editorEl = document.getElementById('content');
+    if (!editorEl || !activeNoteName) return false;
+
+    const cleanText = String(text || '');
+    const cleanHtml = String(html || '');
+
+    // If user explicitly chose "Paste as Plain Text" (Ctrl+Shift+V), Still parse Markdown if the clipboard is a Markdown document,
+    // or if plainOnly is false:
+    if (cleanText && isMarkdownContent(cleanText)) {
+        const converted = markdownToNoshHtml(cleanText);
+        if (converted) {
+            return insertHtmlNodesIntoEditor(converted);
+        }
+    }
+
+    if (!plainOnly && cleanHtml && cleanHtml.trim()) {
+        // Check if the HTML is just an IDE/editor wrapper around raw Markdown (e.g. VS Code / Cursor clipboard)
+        const probe = document.createElement('div');
+        probe.innerHTML = cleanHtml;
+        const probeText = probe.textContent || '';
+        const hasSemanticTags = Boolean(probe.querySelector('h1, h2, h3, h4, table, ul, ol, blockquote, .katex'));
+        if (!hasSemanticTags && isMarkdownContent(probeText)) {
+            const converted = markdownToNoshHtml(probeText);
+            if (converted) {
+                return insertHtmlNodesIntoEditor(converted);
+            }
+        }
+
+        const sanitized = sanitizeAndConvertPastedHtml(cleanHtml, cleanText);
+        if (sanitized) {
+            return insertHtmlNodesIntoEditor(sanitized);
+        }
+    }
+
+    if (cleanText) {
+        // Plain multi-line text without Markdown markers: convert paragraphs cleanly
+        if (cleanText.includes('\n')) {
+            const converted = markdownToNoshHtml(cleanText);
+            if (converted) {
+                return insertHtmlNodesIntoEditor(converted);
+            }
+        }
+    }
+
+    return false;
+}
+
+window.handleSmartEditorPaste = handleSmartEditorPaste;
+window.markdownToNoshHtml = markdownToNoshHtml;
+window.renderClaudeEmbeddedDiagram = renderClaudeEmbeddedDiagram;
+
+// Intercept Paste on #content (and on Welcome Dashboard to auto-create note on paste)
+document.addEventListener('paste', async (e) => {
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.closest('.CodeMirror'))) {
+        return;
+    }
+
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    // Allow image paste handler in imageVideo.js to handle image files
+    const items = clipboardData.items ? Array.from(clipboardData.items) : [];
+    if (items.some(item => item.type && item.type.startsWith('image/'))) {
+        return;
+    }
+
+    const text = clipboardData.getData('text/plain') || '';
+    const html = clipboardData.getData('text/html') || '';
+    if (!text && !html) return;
+
+    // If user pastes while on Welcome Dashboard (!activeNoteName), auto-create a note and paste into it
+    if (!activeNoteName) {
+        if (!isMarkdownContent(text) && !html) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof createNewFile === 'function') {
+            await createNewFile();
+            handleSmartEditorPaste({ text, html, plainOnly: false });
+        }
+        return;
+    }
+
+    const editorEl = document.getElementById('content');
+    if (!editorEl) return;
+
+    if (isMarkdownContent(text) || (html && html.trim()) || text.includes('\n')) {
+        const handled = handleSmartEditorPaste({ text, html, plainOnly: false });
+        if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }
+});
+
+// Drag and Drop File Import (.md, .pdf, .pptx, .docx, .zip, .csv, .txt, .html, .nsh)
+async function importDroppedFilesToVault(files, targetFolderId = null) {
+    if (!files || files.length === 0) return false;
+    await invokeSavesDir();
+
+    let importedCount = 0;
+    const supportedExts = ['.md', '.markdown', '.pdf', '.pptx', '.docx', '.zip', '.csv', '.txt', '.html', '.nsh'];
+
+    for (let idx = 0; idx < files.length; idx++) {
+        const file = files[idx];
+        const ext = path.extname(file.name).toLowerCase();
+        if (!supportedExts.includes(ext)) {
+            showToast(`Skipped unsupported file: ${file.name}`, 'warning');
+            continue;
+        }
+
+        try {
+            let parsedResult = null;
+            if (file.path) {
+                parsedResult = await ipcRenderer.invoke('open-file-dialog', {
+                    filePath: file.path,
+                    fileName: file.name
+                });
+            } else if (typeof file.arrayBuffer === 'function') {
+                const ab = await file.arrayBuffer();
+                const buffer = Buffer.from(ab);
+                parsedResult = await ipcRenderer.invoke('open-file-dialog', {
+                    mode: 'parse-buffer',
+                    fileName: file.name,
+                    bytes: Array.from(new Uint8Array(buffer))
+                });
+            }
+
+            if (parsedResult) {
+                const ok = await handleImportResult(parsedResult, targetFolderId);
+                if (ok) importedCount++;
+            }
+        } catch (err) {
+            console.error(`Failed to import dropped file "${file.name}":`, err);
+            showToast(`Failed to import ${file.name}`, 'error');
+        }
+    }
+    return importedCount > 0;
+}
+
+window.importDroppedFilesToVault = importDroppedFilesToVault;
+
 window.addEventListener('dragover', (e) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    if (window._draggedNoteName) {
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        return;
+    }
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
 });
 
 window.addEventListener('drop', async (e) => {
+    if (window._draggedNoteName) return;
     e.preventDefault();
     if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
-    const file = e.dataTransfer.files[0];
-    const ext = path.extname(file.name).toLowerCase();
-
-    if (['.md', '.txt', '.html', '.nsh'].includes(ext)) {
-        try {
-            let fileText = '';
-            if (file.path && fs.existsSync(file.path)) {
-                fileText = await fsPromises.readFile(file.path, 'utf8');
-            } else {
-                fileText = await file.text();
-            }
-
-            const baseName = path.basename(file.name, ext);
-            let noteContent = '';
-
-            if (ext === '.md') {
-                const lines = fileText.split('\n');
-                let inCode = false;
-                let codeLines = [];
-                let codeLang = 'javascript';
-                const htmlParts = [];
-
-                for (const line of lines) {
-                    if (line.trim().startsWith('```')) {
-                        if (!inCode) {
-                            inCode = true;
-                            codeLang = line.trim().replace(/^```/, '') || 'javascript';
-                            codeLines = [];
-                        } else {
-                            inCode = false;
-                            const langMeta = typeof getLanguageMeta === 'function' ? getLanguageMeta(codeLang) : { name: codeLang, mode: codeLang, icon: 'solar:code-square-linear' };
-                            htmlParts.push(`
-                                <div class="code-block-wrapper" contenteditable="false">
-                                    <div class="code-block-header">
-                                        <div class="code-header-left">
-                                            <div class="code-window-dots">
-                                                <span class="code-dot red"></span>
-                                                <span class="code-dot yellow"></span>
-                                                <span class="code-dot green"></span>
-                                            </div>
-                                            <span class="code-lang-tag clickable" onclick="openBlockLangSwitcher(this)">
-                                                <iconify-icon class="lang-icon" icon="${langMeta.icon}"></iconify-icon>
-                                                <span class="lang-name">${langMeta.name}</span>
-                                                <iconify-icon class="lang-caret" icon="solar:alt-arrow-down-linear"></iconify-icon>
-                                            </span>
-                                        </div>
-                                        <div class="code-block-actions">
-                                            <button class="code-action-btn wrap-btn" onclick="toggleCodeWrap(this)">Wrap</button>
-                                            <button class="code-action-btn copy-btn" onclick="copyCodeSnippet(this)">Copy</button>
-                                            <button class="code-action-btn delete" onclick="deleteCodeBlock(this)"><iconify-icon icon="solar:trash-bin-trash-linear"></iconify-icon></button>
-                                        </div>
-                                    </div>
-                                    <textarea class="code" language="${langMeta.mode}" data-label="${langMeta.name}" style="display:block;">${escapeHtml(codeLines.join('\n'))}</textarea>
-                                </div>
-                            `);
-                        }
-                        continue;
-                    }
-
-                    if (inCode) {
-                        codeLines.push(line);
-                        continue;
-                    }
-
-                    if (line.startsWith('# ')) htmlParts.push(`<h1>${escapeHtml(line.slice(2))}</h1>`);
-                    else if (line.startsWith('## ')) htmlParts.push(`<h2>${escapeHtml(line.slice(3))}</h2>`);
-                    else if (line.startsWith('### ')) htmlParts.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
-                    else if (line.startsWith('- [x] ')) htmlParts.push(`<div class="checklist-item completed" contenteditable="false"><input type="checkbox" class="checklist-checkbox" checked onchange="toggleChecklistItem(this)"><span class="checklist-text" contenteditable="true">${escapeHtml(line.slice(6))}</span></div>`);
-                    else if (line.startsWith('- [ ] ')) htmlParts.push(`<div class="checklist-item" contenteditable="false"><input type="checkbox" class="checklist-checkbox" onchange="toggleChecklistItem(this)"><span class="checklist-text" contenteditable="true">${escapeHtml(line.slice(6))}</span></div>`);
-                    else if (line.startsWith('- ') || line.startsWith('* ')) htmlParts.push(`<ul><li>${escapeHtml(line.slice(2))}</li></ul>`);
-                    else if (line.trim().length > 0) {
-                        let parsedLine = escapeHtml(line);
-                        parsedLine = parsedLine.replace(/\[\[([^\[\]]+)\]\]/g, '<span class="note-internal-link" data-note="$1" contenteditable="false"><iconify-icon icon="solar:link-minimalistic-2-linear"></iconify-icon> $1</span>');
-                        htmlParts.push(`<p>${parsedLine}</p>`);
-                    }
-                    else htmlParts.push('<p><br></p>');
-                }
-                noteContent = htmlParts.join('\n');
-            } else if (ext === '.nsh' || ext === '.html') {
-                noteContent = fileText;
-            } else {
-                noteContent = `<h1>${escapeHtml(baseName)}</h1><p>${escapeHtml(fileText).replace(/\n/g, '<br>')}</p>`;
-            }
-
-            if (!savesDir) await invokeSavesDir();
-            const newFilePath = path.join(savesDir, `${baseName}.nsh`);
-            await fsPromises.writeFile(newFilePath, noteContent, 'utf8');
-            await readDatabase(baseName);
-            showToast(`Imported "${file.name}" as note`, 'success');
-        } catch (err) {
-            console.error('Failed to import dropped file:', err);
-            showToast('Failed to import dropped file', 'error');
-        }
-    }
+    await importDroppedFilesToVault(e.dataTransfer.files, null);
 });

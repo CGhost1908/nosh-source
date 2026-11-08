@@ -98,6 +98,9 @@ ipcRenderer.on('drive-token', (event, tokens) => {
     showToast(`Google Drive linked${email ? ` (${email})` : ''}!`, 'success');
     loadSettingsIntoUI();
     getNoshFilesFromDrive();
+    if (typeof window.syncAuthTokenWithGoogleDrive === 'function') {
+        window.syncAuthTokenWithGoogleDrive();
+    }
 });
 
 function disconnectDrive() {
@@ -478,6 +481,9 @@ async function refreshDriveToken() {
                              (localStorage.getItem('google_drive_refresh_token') && localStorage.getItem('google_drive_refresh_token') !== 'null');
         if (hasDriveAuth && typeof getNoshFilesFromDrive === 'function') {
             getNoshFilesFromDrive();
+            if (typeof window.syncAuthTokenWithGoogleDrive === 'function') {
+                window.syncAuthTokenWithGoogleDrive();
+            }
         }
     }
 

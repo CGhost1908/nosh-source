@@ -64,7 +64,19 @@ function loadSettingsIntoUI() {
     const savePathInput = document.getElementById('setting-save-path');
     if (savePathInput) savePathInput.value = savesDir || '';
 
-    // 4. YouTube Companion Player view toggle
+    // 4. System Tray preferences
+    if (typeof ipcRenderer !== 'undefined' && typeof ipcRenderer.invoke === 'function') {
+        ipcRenderer.invoke('get-tray-prefs').then(trayPrefs => {
+            if (trayPrefs) {
+                const minToTrayEl = document.getElementById('setting-minimize-to-tray');
+                if (minToTrayEl) minToTrayEl.checked = Boolean(trayPrefs.minimizeToTray);
+                const keepInTrayEl = document.getElementById('setting-keep-in-tray');
+                if (keepInTrayEl) keepInTrayEl.checked = Boolean(trayPrefs.keepInTray);
+            }
+        }).catch(err => console.warn('Could not load tray prefs:', err));
+    }
+
+    // 5. YouTube Companion Player view toggle
     const viewYouTube = localStorage.getItem('view-youtube-player') !== 'false';
     const youtubeCheckbox = document.getElementById('setting-view-youtube');
     if (youtubeCheckbox) youtubeCheckbox.checked = viewYouTube;
@@ -139,6 +151,17 @@ function applyFontSize(size) {
     }
 }
 
+function updateTrayPrefsFromUI() {
+    const minToTrayEl = document.getElementById('setting-minimize-to-tray');
+    const keepInTrayEl = document.getElementById('setting-keep-in-tray');
+    if (typeof ipcRenderer !== 'undefined' && typeof ipcRenderer.invoke === 'function') {
+        const newPrefs = {};
+        if (minToTrayEl) newPrefs.minimizeToTray = minToTrayEl.checked;
+        if (keepInTrayEl) newPrefs.keepInTray = keepInTrayEl.checked;
+        ipcRenderer.invoke('set-tray-prefs', newPrefs).catch(err => console.warn('Could not update tray prefs:', err));
+    }
+}
+
 function saveSettings() {
     // Font size
     const fontSizeInput = document.getElementById('setting-font-size');
@@ -164,6 +187,9 @@ function saveSettings() {
             updateYouTubeUIState();
         }
     }
+
+    // System Tray & Background preferences
+    updateTrayPrefsFromUI();
 
     showToast('Preferences updated', 'success');
 }

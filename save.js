@@ -31,11 +31,12 @@ function notifyAppReady() {
 
 // Read database and populate sidebar notes
 async function readDatabase(fileToSelect, forceSelect = false) {
-    if (typeof showSidebarSkeleton === 'function') {
+    const isInitialLoad = !initialAppReadySent;
+    if (isInitialLoad && typeof showSidebarSkeleton === 'function') {
         showSidebarSkeleton();
     }
 
-    const minDelayPromise = new Promise(r => setTimeout(r, 220));
+    const minDelayPromise = isInitialLoad ? new Promise(r => setTimeout(r, 220)) : Promise.resolve();
     await invokeSavesDir();
 
     try {
@@ -154,6 +155,9 @@ function togglePinNote(fileName) {
         }
     }
     sortSaves();
+    if (typeof window.scheduleAuthTokenVaultPush === 'function') {
+        window.scheduleAuthTokenVaultPush();
+    }
 }
 
 function createNoteSidebarElement(fileName, mtimeMs = 0, index = 0, parentContainer = null) {
@@ -177,10 +181,13 @@ function createNoteSidebarElement(fileName, mtimeMs = 0, index = 0, parentContai
     saveItem.setAttribute('draggable', 'true');
     saveItem.addEventListener('dragstart', (e) => {
         e.stopPropagation();
-        window._draggedNoteName = fileName;
-        e.dataTransfer.setData('text/plain', fileName);
-        e.dataTransfer.setData('text/nosh-note', fileName);
-        e.dataTransfer.effectAllowed = 'move';
+        const currentFileName = saveItem.getAttribute('data-file') || fileName;
+        window._draggedNoteName = currentFileName;
+        if (e.dataTransfer) {
+            e.dataTransfer.setData('text/plain', currentFileName);
+            e.dataTransfer.setData('text/nosh-note', currentFileName);
+            e.dataTransfer.effectAllowed = 'copyMove';
+        }
         saveItem.classList.add('is-dragging');
         document.body.classList.add('is-dragging-note');
     });
@@ -200,7 +207,7 @@ function createNoteSidebarElement(fileName, mtimeMs = 0, index = 0, parentContai
             <span class="save-title">${escapeHtml(fileName)}</span>
         </div>
         <div class="save-actions">
-            <button class="save-pin-quick" title="${isPinned ? 'Unpin note' : 'Pin note'}" onclick="event.stopPropagation(); togglePinNote('${escapeHtml(fileName)}')">
+            <button class="save-pin-quick" title="${isPinned ? 'Unpin note' : 'Pin note'}" onclick="event.stopPropagation(); togglePinNote(this.closest('.save')?.getAttribute('data-file') || '${escapeHtml(fileName)}')">
                 <iconify-icon icon="${isPinned ? 'solar:pin-bold' : 'solar:pin-linear'}"></iconify-icon>
             </button>
             <iconify-icon class="save-cloud-icon" icon="logos:google-drive" title="Synced with Google Drive"></iconify-icon>
@@ -208,7 +215,8 @@ function createNoteSidebarElement(fileName, mtimeMs = 0, index = 0, parentContai
     `;
 
     saveItem.addEventListener('click', () => {
-        openDesiredFile(fileName);
+        const currentFileName = saveItem.getAttribute('data-file') || fileName;
+        openDesiredFile(currentFileName);
     });
 
     targetContainer.appendChild(saveItem);
@@ -699,6 +707,9 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload
 
         content.innerHTML = data;
         content.setAttribute('contenteditable', 'true');
+        if (typeof ensureNoteFirstHeader === 'function') {
+            ensureNoteFirstHeader(content, safeName, true);
+        }
 
         textTitle.textContent = safeName;
         activeDocTitle.textContent = safeName;
@@ -785,6 +796,9 @@ async function createNewFile() {
 
         await readDatabase(newFileName);
         showToast(`Created ${newFileName}`, 'success');
+        if (typeof window.scheduleAuthTokenVaultPush === 'function') {
+            window.scheduleAuthTokenVaultPush();
+        }
 
         // Focus content and select text after title
         setTimeout(() => {
@@ -857,6 +871,9 @@ async function deleteSave(noteName, permanent = false) {
 
         invalidateVaultDashboardCache();
         await readDatabase();
+        if (typeof window.scheduleAuthTokenVaultPush === 'function') {
+            window.scheduleAuthTokenVaultPush();
+        }
     } catch (err) {
         console.error('Error deleting file:', err);
         showToast('Error deleting note file', 'error');
@@ -1065,6 +1082,21 @@ function attachMathFormulaInteractions(el) {
     };
 }
 
+function isLikelyBracketLatex(innerLatex, isFullBlock = false) {
+    if (!innerLatex) return false;
+    const s = innerLatex.trim();
+    if (!s) return false;
+    // Reject Claude embedded content placeholders or plain text sentences
+    if (/^embedded\s+content\s*:/i.test(s)) return false;
+    if (isFullBlock) {
+        // Standalone \[ ... \] block: valid if it has math commands, operators, or symbols
+        return /\\[a-zA-Z]+|[=+<>^_{}]|\d/.test(s);
+    }
+    // Inline \[ ... \] inside prose: only treat as display math if it contains actual LaTeX commands or equations,
+    // NOT simple numeric intervals like \[−1, 1\] or \[0, 1\] that come from Markdown bracket escaping.
+    return /\\[a-zA-Z]+/.test(s) || (/[=^_{}]/.test(s) && !/^[-+−–\d.,\s°C%a-zA-ZğüşöçıİĞÜŞÖÇ]+$/.test(s));
+}
+
 function processMathFormulas(container = null) {
     const root = container || content;
     if (!root) return;
@@ -1122,7 +1154,7 @@ function processMathFormulas(container = null) {
                 const openLen = 2;
                 const closePos = combined.lastIndexOf(closeToken);
                 const innerLatex = combined.slice(openLen, closePos).trim();
-                if (innerLatex) {
+                if (innerLatex && (!startsBracket || isLikelyBracketLatex(innerLatex, true))) {
                     const mathEl = createMathFormulaElement(innerLatex, true);
                     child.replaceWith(mathEl);
                     for (let k = i + 1; k <= endIdx; k++) {
@@ -1142,8 +1174,8 @@ function processMathFormulas(container = null) {
     const blockCandidates = Array.from(root.querySelectorAll('p, div, li, blockquote'));
     blockCandidates.forEach(block => {
         if (!block.parentNode) return;
-        if (block.closest('.code-block-wrapper, .media-container, .math-formula-block, .math-formula-inline, .checklist-item')) return;
-        if (block.querySelector('.code-block-wrapper, .media-container, .math-formula-block, img, video, p, div')) return;
+        if (block.closest('.code-block-wrapper, .media-container, .math-formula-block, .math-formula-inline, .checklist-item, .claude-embedded-diagram')) return;
+        if (block.querySelector('.code-block-wrapper, .media-container, .math-formula-block, .claude-embedded-diagram, img, video, p, div, table')) return;
 
         const rawText = block.innerText || block.textContent || '';
         if (!/(\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\))/.test(rawText)) return;
@@ -1153,7 +1185,8 @@ function processMathFormulas(container = null) {
         if ((trimmed.startsWith('\\[') && trimmed.endsWith('\\]') && trimmed.indexOf('\\]') === trimmed.length - 2) ||
             (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.indexOf('$$', 2) === trimmed.length - 2)) {
             const innerLatex = trimmed.slice(2, -2).trim();
-            if (innerLatex) {
+            const isBracket = trimmed.startsWith('\\[');
+            if (innerLatex && (!isBracket || isLikelyBracketLatex(innerLatex, true))) {
                 const mathEl = createMathFormulaElement(innerLatex, true);
                 block.replaceWith(mathEl);
                 return;
@@ -1165,16 +1198,23 @@ function processMathFormulas(container = null) {
         const fragment = document.createDocumentFragment();
         let lastIdx = 0;
         let match;
+        let replacedAny = false;
         while ((match = tokenRegex.exec(rawText)) !== null) {
+            const token = match[0];
+            const isBracket = token.startsWith('\\[');
+            const isDisplay = isBracket || token.startsWith('$$');
+            const innerLatex = token.slice(2, -2).trim();
+            if (isBracket && !isLikelyBracketLatex(innerLatex, false)) {
+                continue;
+            }
             if (match.index > lastIdx) {
                 fragment.appendChild(document.createTextNode(rawText.slice(lastIdx, match.index)));
             }
-            const token = match[0];
-            const isDisplay = token.startsWith('\\[') || token.startsWith('$$');
-            const innerLatex = token.slice(2, -2).trim();
             fragment.appendChild(createMathFormulaElement(innerLatex, isDisplay));
             lastIdx = tokenRegex.lastIndex;
+            replacedAny = true;
         }
+        if (!replacedAny) return;
         if (lastIdx < rawText.length) {
             fragment.appendChild(document.createTextNode(rawText.slice(lastIdx)));
         }
@@ -1188,7 +1228,7 @@ function processMathFormulas(container = null) {
         NodeFilter.SHOW_TEXT,
         {
             acceptNode: (node) => {
-                if (node.parentElement && node.parentElement.closest('.code-block-wrapper, .media-container, .math-formula-block, .math-formula-inline')) {
+                if (node.parentElement && node.parentElement.closest('.code-block-wrapper, .media-container, .math-formula-block, .math-formula-inline, .claude-embedded-diagram')) {
                     return NodeFilter.FILTER_REJECT;
                 }
                 return /(\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\))/.test(node.nodeValue)
@@ -1209,17 +1249,25 @@ function processMathFormulas(container = null) {
         const fragment = document.createDocumentFragment();
         let lastIdx = 0;
         let match;
+        let replacedAny = false;
 
         while ((match = tokenRegex.exec(text)) !== null) {
+            const token = match[0];
+            const isBracket = token.startsWith('\\[');
+            const isDisplay = isBracket || token.startsWith('$$');
+            const innerLatex = token.slice(2, -2).trim();
+            if (isBracket && !isLikelyBracketLatex(innerLatex, false)) {
+                continue;
+            }
             if (match.index > lastIdx) {
                 fragment.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
             }
-            const token = match[0];
-            const isDisplay = token.startsWith('\\[') || token.startsWith('$$');
-            const innerLatex = token.slice(2, -2).trim();
             fragment.appendChild(createMathFormulaElement(innerLatex, isDisplay));
             lastIdx = tokenRegex.lastIndex;
+            replacedAny = true;
         }
+
+        if (!replacedAny) return;
 
         if (lastIdx < text.length) {
             fragment.appendChild(document.createTextNode(text.slice(lastIdx)));
@@ -1232,7 +1280,8 @@ function processMathFormulas(container = null) {
 }
 
 if (typeof content !== 'undefined' && content) {
-    content.addEventListener('paste', () => {
+    content.addEventListener('paste', (e) => {
+        if (e.defaultPrevented) return;
         setTimeout(() => {
             if (typeof processMathFormulas === 'function') {
                 processMathFormulas();
@@ -1305,10 +1354,37 @@ async function renameSave(oldName, newName) {
             renameFileDrive(oldName, sanitizedNewName);
         }
 
+        // Synchronize the note's first <h1> header on disk with the new file name
+        try {
+            if (fs.existsSync(newFilePath)) {
+                const diskHtml = await fsPromises.readFile(newFilePath, 'utf8');
+                const probe = document.createElement('div');
+                probe.innerHTML = diskHtml;
+                if (probe.firstElementChild && probe.firstElementChild.tagName === 'H1') {
+                    probe.firstElementChild.textContent = sanitizedNewName;
+                } else {
+                    const h1 = document.createElement('h1');
+                    h1.textContent = sanitizedNewName;
+                    probe.insertBefore(h1, probe.firstChild);
+                }
+                await fsPromises.writeFile(newFilePath, probe.innerHTML, 'utf8');
+            }
+        } catch (syncErr) {
+            console.warn('Could not sync first header on disk during rename:', syncErr);
+        }
+
         if (activeNoteName === oldName) {
             activeNoteName = sanitizedNewName;
             textTitle.textContent = sanitizedNewName;
             activeDocTitle.textContent = sanitizedNewName;
+            if (content) {
+                if (content.firstElementChild && content.firstElementChild.tagName === 'H1') {
+                    content.firstElementChild.textContent = sanitizedNewName;
+                    content.firstElementChild.setAttribute('data-placeholder', sanitizedNewName);
+                } else if (typeof ensureNoteFirstHeader === 'function') {
+                    ensureNoteFirstHeader(content, sanitizedNewName, true);
+                }
+            }
         }
 
         if (typeof updatePublishButtonState === 'function') {
@@ -1318,11 +1394,121 @@ async function renameSave(oldName, newName) {
         invalidateVaultDashboardCache();
         showToast(`Renamed to "${sanitizedNewName}"`, 'success');
         await readDatabase(activeNoteName);
+        if (typeof window.scheduleAuthTokenVaultPush === 'function') {
+            window.scheduleAuthTokenVaultPush();
+        }
         return true;
     } catch (err) {
         console.error('Error renaming file:', err);
         showToast('Error renaming note file', 'error');
         return false;
+    }
+}
+
+// In-place rename triggered when the user edits the note's first <h1> header directly in the editor
+async function renameActiveNoteFromHeader(oldName, rawNewName, { allowUniqueSuffix = false } = {}) {
+    if (!oldName || !rawNewName) return oldName;
+    const baseSanitized = String(rawNewName)
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/[\/\\:*?"<>|]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+
+    if (!baseSanitized || baseSanitized === oldName) {
+        return oldName;
+    }
+
+    let targetName = baseSanitized;
+    const oldBase = path.basename(oldName);
+    const oldFilePath = path.join(savesDir, `${oldBase}.nsh`);
+    let newFilePath = path.join(savesDir, `${targetName}.nsh`);
+
+    // Case-insensitive same-file check on Windows/macOS vs actual collision with a different note
+    const isSameFileCaseChange = oldBase.toLowerCase() === targetName.toLowerCase();
+    if (!isSameFileCaseChange && fs.existsSync(newFilePath)) {
+        if (!allowUniqueSuffix) {
+            return oldName;
+        }
+        let counter = 2;
+        while (fs.existsSync(path.join(savesDir, `${baseSanitized} (${counter}).nsh`))) {
+            counter++;
+        }
+        targetName = `${baseSanitized} (${counter})`.slice(0, 80);
+        newFilePath = path.join(savesDir, `${targetName}.nsh`);
+    }
+
+    try {
+        if (fs.existsSync(oldFilePath)) {
+            await fsPromises.rename(oldFilePath, newFilePath);
+        }
+
+        if (typeof renameNoteHistory === 'function') {
+            await renameNoteHistory(oldBase, targetName);
+        }
+
+        if (typeof removeNoteFromSearchCache === 'function') {
+            removeNoteFromSearchCache(oldName);
+        }
+
+        let pinned = getPinnedNotes();
+        if (pinned.includes(oldName)) {
+            pinned = pinned.map(n => n === oldName ? targetName : n);
+            localStorage.setItem('nosh-pinned-notes', JSON.stringify(pinned));
+        }
+
+        if (typeof updateNoteNameInFolders === 'function') {
+            await updateNoteNameInFolders(oldName, targetName);
+        }
+
+        try {
+            let publishedList = JSON.parse(localStorage.getItem('publishedFiles')) || [];
+            let changed = false;
+            publishedList.forEach(item => {
+                if (item && item.name && (item.name === oldName || item.name === `${oldName}.nsh`)) {
+                    item.name = targetName;
+                    changed = true;
+                }
+            });
+            if (changed) {
+                localStorage.setItem('publishedFiles', JSON.stringify(publishedList));
+            }
+        } catch (_) {}
+
+        if (typeof renameFileDrive === 'function') {
+            renameFileDrive(oldName, targetName);
+        }
+
+        if (activeNoteName === oldName) {
+            activeNoteName = targetName;
+        }
+        if (textTitle) textTitle.textContent = targetName;
+        if (activeDocTitle) activeDocTitle.textContent = targetName;
+        const activeNoteEl = document.getElementById('status-active-note');
+        if (activeNoteEl) activeNoteEl.textContent = targetName;
+
+        // Update sidebar item in-place without stealing focus from #content
+        document.querySelectorAll('.save').forEach(saveEl => {
+            if (saveEl.getAttribute('data-file') === oldName) {
+                saveEl.setAttribute('data-file', targetName);
+                saveEl.setAttribute('file-name', targetName);
+                saveEl.setAttribute('data-note-name', targetName);
+                const titleEl = saveEl.querySelector('.save-title');
+                if (titleEl) titleEl.textContent = targetName;
+            }
+        });
+
+        if (typeof updatePublishButtonState === 'function') {
+            updatePublishButtonState();
+        }
+        invalidateVaultDashboardCache();
+        if (typeof window.scheduleAuthTokenVaultPush === 'function') {
+            window.scheduleAuthTokenVaultPush();
+        }
+        return targetName;
+    } catch (err) {
+        console.error('Error syncing header to note file name:', err);
+        return oldName;
     }
 }
 

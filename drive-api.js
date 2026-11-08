@@ -205,8 +205,63 @@ const operations = {
             fields: 'files(id, name)',
             pageSize: 1000
         });
-        const names = (res.data.files || []).map(f => path.basename(f.name, '.nsh'));
+        const names = (res.data.files || [])
+            .filter(f => f && f.name && String(f.name).toLowerCase().endsWith('.nsh'))
+            .map(f => path.basename(f.name, '.nsh'));
         return { value: names, tokens };
+    },
+
+    async saveEncryptedAuthToken(auth, encryptedPayload) {
+        const tokenFileName = 'nosh_auth_token.enc';
+        const { drive, tokens } = await connect(auth);
+
+        let folderId = await findFolderId(drive);
+        if (!folderId) {
+            const created = await drive.files.create({
+                resource: { name: FOLDER_NAME, mimeType: FOLDER_MIME },
+                fields: 'id'
+            });
+            folderId = created.data.id;
+        }
+
+        const existing = await drive.files.list({
+            q: `name = '${q(tokenFileName)}' and '${q(folderId)}' in parents and trashed = false`,
+            fields: 'files(id, name)'
+        });
+        const media = { mimeType: 'text/plain', body: String(encryptedPayload) };
+        const files = existing.data.files || [];
+
+        if (files.length > 0) {
+            await drive.files.update({ fileId: files[0].id, media });
+            for (let i = 1; i < files.length; i++) {
+                try { await drive.files.delete({ fileId: files[i].id }); } catch (_) {}
+            }
+        } else {
+            await drive.files.create({
+                resource: { name: tokenFileName, parents: [folderId] },
+                media,
+                fields: 'id'
+            });
+        }
+        return { value: true, tokens };
+    },
+
+    async loadEncryptedAuthToken(auth) {
+        const tokenFileName = 'nosh_auth_token.enc';
+        const { drive, tokens } = await connect(auth);
+        const folderId = await findFolderId(drive);
+        if (!folderId) return { value: null, tokens };
+
+        const existing = await drive.files.list({
+            q: `name = '${q(tokenFileName)}' and '${q(folderId)}' in parents and trashed = false`,
+            fields: 'files(id, name)'
+        });
+        const files = existing.data.files || [];
+        if (files.length === 0) return { value: null, tokens };
+
+        const res = await drive.files.get({ fileId: String(files[0].id), alt: 'media' }, { responseType: 'text' });
+        const content = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+        return { value: content, tokens };
     },
 
     async listNoteFiles(auth) {

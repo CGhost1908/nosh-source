@@ -20,7 +20,8 @@ const SEND_CHANNELS = new Set([
 const INVOKE_CHANNELS = new Set([
     'is-maximized', 'open-external', 'open-folder', 'select-folder', 'get-save-path',
     'upload-to-catbox', 'open-file-dialog', 'save-file-dialog', 'export-file-dialog',
-    'export-pdf', 'create-file', 'open-youtube-pip', 'close-youtube-pip', 'get-server-port'
+    'export-pdf', 'create-file', 'open-youtube-pip', 'close-youtube-pip', 'get-server-port',
+    'get-tray-prefs', 'set-tray-prefs'
 ]);
 const LISTEN_CHANNELS = new Set([
     'confirm-close', 'window-maximized-state', 'open-nsh-file', 'drive-token', 'quick-capture-append'

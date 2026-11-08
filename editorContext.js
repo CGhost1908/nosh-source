@@ -155,6 +155,14 @@
         }
 
         runInEditor(() => {
+            if (typeof window.handleSmartEditorPaste === 'function') {
+                const handled = window.handleSmartEditorPaste({
+                    text,
+                    html,
+                    plainOnly: plain
+                });
+                if (handled) return;
+            }
             if (!plain && html && html.trim()) {
                 document.execCommand('insertHTML', false, html);
             } else if (text) {

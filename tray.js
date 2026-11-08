@@ -5,7 +5,7 @@ const { app, Tray, Menu, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_PREFS = { keepInTray: true, trayHintShown: false };
+const DEFAULT_PREFS = { keepInTray: true, minimizeToTray: false, trayHintShown: false };
 
 let prefs = { ...DEFAULT_PREFS };
 let tray = null;
@@ -50,10 +50,19 @@ function shouldKeepInTray() {
     return prefs.keepInTray && isTrayActive();
 }
 
+function shouldMinimizeToTray() {
+    return Boolean(prefs.minimizeToTray) && isTrayActive();
+}
+
 function setKeepInTray(value) {
     prefs.keepInTray = Boolean(value);
     savePrefs();
     refreshMenu();
+}
+
+function setMinimizeToTray(value) {
+    prefs.minimizeToTray = Boolean(value);
+    savePrefs();
 }
 
 function markHintShown() {
@@ -88,11 +97,37 @@ function refreshMenu() {
 }
 
 function loadIcon(iconPath, fallbackPath) {
-    let image = nativeImage.createFromPath(iconPath);
-    if (image.isEmpty() && fallbackPath) {
-        image = nativeImage.createFromPath(fallbackPath).resize({ width: 16, height: 16 });
+    // Prefer high-resolution PNG source for highest quality Lanczos/bicubic downscaling
+    const candidates = [fallbackPath, iconPath].filter(p => p && fs.existsSync(p));
+    const pngCandidate = candidates.find(p => p.toLowerCase().endsWith('.png'));
+    const chosenPath = pngCandidate || candidates[0];
+
+    if (!chosenPath) return nativeImage.createEmpty();
+
+    const base = nativeImage.createFromPath(chosenPath);
+    if (base.isEmpty()) return nativeImage.createEmpty();
+
+    // Standard Windows tray sizes across DPI scales:
+    // 100% scale (96 DPI): 16x16
+    // 125% scale (120 DPI): 20x20 (default on most 1080p Windows laptops)
+    // 150% scale (144 DPI): 24x24 (common on 2K / high-DPI screens)
+    // 200% scale (192 DPI): 32x32 (common on 4K screens)
+    // 300% scale (288 DPI): 48x48
+    const multi = nativeImage.createEmpty();
+    const representations = [
+        { scaleFactor: 1.0, size: 16 },
+        { scaleFactor: 1.25, size: 20 },
+        { scaleFactor: 1.5, size: 24 },
+        { scaleFactor: 2.0, size: 32 },
+        { scaleFactor: 3.0, size: 48 }
+    ];
+
+    for (const { scaleFactor, size } of representations) {
+        const resized = base.resize({ width: size, height: size, quality: 'best' });
+        multi.addRepresentation({ scaleFactor, width: size, height: size, buffer: resized.toPNG() });
     }
-    return image;
+
+    return multi;
 }
 
 // handlers: { onOpen, onQuickCapture, onQuit }
@@ -135,4 +170,4 @@ if (process.env.NOSH_E2E === '1') {
     global.__noshTray = { getTray: () => tray, buildMenuTemplate, getPrefs, setKeepInTray };
 }
 
-module.exports = { loadPrefs, getPrefs, setKeepInTray, shouldKeepInTray, createTray, destroyTray, showHint };
+module.exports = { loadPrefs, getPrefs, setKeepInTray, setMinimizeToTray, shouldKeepInTray, shouldMinimizeToTray, createTray, destroyTray, showHint };

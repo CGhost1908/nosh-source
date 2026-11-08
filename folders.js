@@ -424,23 +424,26 @@ async function renderSidebarWithFolders(fileStats) {
         });
 
         // Smooth & reliable Drag and Drop target on entire folder
-        let folderDragCount = 0;
         folderEl.addEventListener('dragenter', (e) => {
             e.preventDefault();
-            folderDragCount++;
+            e.stopPropagation();
             folderEl.classList.add('drag-over-folder');
             folderHeader.classList.add('drag-over');
         });
 
         folderEl.addEventListener('dragover', (e) => {
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            e.stopPropagation();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = window._draggedNoteName ? 'move' : 'copy';
+            }
+            folderEl.classList.add('drag-over-folder');
+            folderHeader.classList.add('drag-over');
         });
 
         folderEl.addEventListener('dragleave', (e) => {
-            folderDragCount--;
-            if (folderDragCount <= 0) {
-                folderDragCount = 0;
+            e.stopPropagation();
+            if (!folderEl.contains(e.relatedTarget)) {
                 folderEl.classList.remove('drag-over-folder');
                 folderHeader.classList.remove('drag-over');
             }
@@ -449,11 +452,11 @@ async function renderSidebarWithFolders(fileStats) {
         folderEl.addEventListener('drop', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            folderDragCount = 0;
             folderEl.classList.remove('drag-over-folder');
             folderHeader.classList.remove('drag-over');
+            document.body.classList.remove('is-dragging-note');
 
-            const noteName = window._draggedNoteName || e.dataTransfer.getData('text/nosh-note') || e.dataTransfer.getData('text/plain');
+            const noteName = window._draggedNoteName || (e.dataTransfer && e.dataTransfer.getData('text/nosh-note'));
             window._draggedNoteName = null;
 
             if (noteName) {
@@ -463,6 +466,23 @@ async function renderSidebarWithFolders(fileStats) {
                 }
                 await moveNoteToFolder(noteName, folder.id);
                 showToast(`Moved "${noteName}" to folder "${folder.name}"`, 'success');
+                return;
+            }
+
+            // External file(s) dropped directly onto a folder from OS Explorer
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0 && typeof window.importDroppedFilesToVault === 'function') {
+                await window.importDroppedFilesToVault(e.dataTransfer.files, folder.id);
+                return;
+            }
+
+            const fallbackNoteName = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+            if (fallbackNoteName && fs.existsSync(path.join(savesDir, `${path.basename(fallbackNoteName)}.nsh`))) {
+                const currentFolder = getNoteFolder(fallbackNoteName);
+                if (currentFolder && currentFolder.id === folder.id) {
+                    return;
+                }
+                await moveNoteToFolder(fallbackNoteName, folder.id);
+                showToast(`Moved "${fallbackNoteName}" to folder "${folder.name}"`, 'success');
             }
         });
 
@@ -485,16 +505,22 @@ async function renderSidebarWithFolders(fileStats) {
         savesContainer._dndRootInit = true;
         savesContainer.addEventListener('dragover', (e) => {
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            if (window._draggedNoteName) {
+                e.stopPropagation();
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            }
         });
         savesContainer.addEventListener('drop', async (e) => {
             // Only trigger if dropped directly on savesContainer or on a root note (not inside a .sidebar-folder)
             if (!e.target.closest('.sidebar-folder')) {
-                e.preventDefault();
-                const noteName = window._draggedNoteName || e.dataTransfer.getData('text/nosh-note') || e.dataTransfer.getData('text/plain');
-                window._draggedNoteName = null;
-
+                const noteName = window._draggedNoteName || (e.dataTransfer && e.dataTransfer.getData('text/nosh-note'));
                 if (noteName) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window._draggedNoteName = null;
+                    document.body.classList.remove('is-dragging-note');
                     const currentFolder = getNoteFolder(noteName);
                     if (currentFolder) {
                         await moveNoteToFolder(noteName, null);

@@ -1,0 +1,15 @@
+Nosh has been continuously developed and maintained as an open-source project since January 21, 2025 (nearly two years of active development):
+
+1. Development History & Commits:
+- Over 370 total public commits across repositories (328 commits in the primary distribution repo, 50 commits in the source repo).
+- First commit: January 21, 2025.
+- Active development and maintenance history leading up to the current v1.4.0 release.
+
+2. Public Releases & Track Record:
+- 9 tagged public releases on GitHub, starting from v1.1.3 (February 2025) up to the latest major release v1.4.0 (November 2026).
+- Releases: https://github.com/CGhost1908/nosh/releases
+- Source Code: https://github.com/CGhost1908/nosh-source
+- Project Website & Documentation: https://cghost1908.github.io/nosh/
+
+3. Transparency & Integrity:
+- The project is fully open source under the MIT license, with full git history, automated testing suites, published changelogs, and an active issue tracker.

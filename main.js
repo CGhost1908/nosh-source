@@ -201,6 +201,13 @@ function createWindow() {
         }
     });
 
+    win.on('minimize', (event) => {
+        if (win && !win.isDestroyed() && noshTray.shouldMinimizeToTray()) {
+            event.preventDefault();
+            win.hide();
+        }
+    });
+
     win.on('unmaximize', () => {
         if (win && !win.isDestroyed()) {
             win.webContents.send('window-maximized-state', false);
@@ -225,7 +232,29 @@ function createWindow() {
 
 // Window control IPCs
 ipcMain.on('minimize', () => {
-    if (win) win.minimize();
+    if (win) {
+        if (noshTray.shouldMinimizeToTray()) {
+            win.hide();
+        } else {
+            win.minimize();
+        }
+    }
+});
+
+ipcMain.handle('get-tray-prefs', () => {
+    return noshTray.getPrefs();
+});
+
+ipcMain.handle('set-tray-prefs', (event, newPrefs) => {
+    if (newPrefs && typeof newPrefs === 'object') {
+        if (typeof newPrefs.keepInTray === 'boolean') {
+            noshTray.setKeepInTray(newPrefs.keepInTray);
+        }
+        if (typeof newPrefs.minimizeToTray === 'boolean') {
+            noshTray.setMinimizeToTray(newPrefs.minimizeToTray);
+        }
+    }
+    return noshTray.getPrefs();
 });
 
 ipcMain.on('maximize', () => {
@@ -449,23 +478,1024 @@ ipcMain.handle('upload-to-catbox', async (event, { filePath, base64Data, fileNam
     }
 });
 
-ipcMain.handle('open-file-dialog', async () => {
-    const result = await dialog.showOpenDialog(win, {
-        title: 'Open Note File',
-        properties: ['openFile'],
-        filters: [
+const zlib = require('zlib');
+
+function decodeXmlEntitiesMain(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+            try { return String.fromCodePoint(parseInt(hex, 16)); } catch (_) { return ''; }
+        })
+        .replace(/&#(\d+);/g, (_, dec) => {
+            try { return String.fromCodePoint(parseInt(dec, 10)); } catch (_) { return ''; }
+        })
+        .replace(/&amp;/g, '&');
+}
+
+function stripNotionUuidMain(rawName) {
+    if (!rawName) return '';
+    return String(rawName)
+        .replace(/\s+[0-9a-fA-F]{32}(?=\.[a-zA-Z0-9]+$|$)/g, '')
+        .replace(/\s+[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=\.[a-zA-Z0-9]+$|$)/g, '')
+        .trim();
+}
+
+// Pure-Node ZIP reader supporting Stored (0) and Deflated (8) entries + nested .zip archives
+function readZipEntriesMain(buffer, depth = 0) {
+    const entries = new Map();
+    if (!Buffer.isBuffer(buffer) || buffer.length < 22 || depth > 3) return entries;
+
+    // Locate End of Central Directory (EOCD) signature 0x06054b50
+    let eocdOffset = -1;
+    const minSearch = Math.max(0, buffer.length - 65558);
+    for (let i = buffer.length - 22; i >= minSearch; i--) {
+        if (buffer.readUInt32LE(i) === 0x06054b50) {
+            eocdOffset = i;
+            break;
+        }
+    }
+
+    if (eocdOffset !== -1) {
+        const totalEntries = buffer.readUInt16LE(eocdOffset + 10);
+        const cdSize = buffer.readUInt32LE(eocdOffset + 12);
+        const cdOffset = buffer.readUInt32LE(eocdOffset + 16);
+        let ptr = cdOffset;
+        const cdEnd = Math.min(buffer.length, cdOffset + cdSize);
+
+        for (let idx = 0; idx < totalEntries && ptr + 46 <= cdEnd; idx++) {
+            if (buffer.readUInt32LE(ptr) !== 0x02014b50) break;
+            const compressionMethod = buffer.readUInt16LE(ptr + 10);
+            const compressedSize = buffer.readUInt32LE(ptr + 20);
+            const fileNameLen = buffer.readUInt16LE(ptr + 28);
+            const extraLen = buffer.readUInt16LE(ptr + 30);
+            const commentLen = buffer.readUInt16LE(ptr + 32);
+            const localHeaderOffset = buffer.readUInt32LE(ptr + 42);
+            const entryName = buffer.slice(ptr + 46, ptr + 46 + fileNameLen).toString('utf8').replace(/\\/g, '/');
+
+            ptr += 46 + fileNameLen + extraLen + commentLen;
+
+            if (entryName.endsWith('/') || localHeaderOffset + 30 > buffer.length) continue;
+            if (buffer.readUInt32LE(localHeaderOffset) !== 0x04034b50) continue;
+
+            const lNameLen = buffer.readUInt16LE(localHeaderOffset + 26);
+            const lExtraLen = buffer.readUInt16LE(localHeaderOffset + 28);
+            const dataStart = localHeaderOffset + 30 + lNameLen + lExtraLen;
+            const dataEnd = Math.min(buffer.length, dataStart + compressedSize);
+            if (dataStart > dataEnd) continue;
+
+            const rawSlice = buffer.slice(dataStart, dataEnd);
+            try {
+                let fileBuf = null;
+                if (compressionMethod === 0) {
+                    fileBuf = rawSlice;
+                } else if (compressionMethod === 8) {
+                    fileBuf = zlib.inflateRawSync(rawSlice);
+                }
+                if (fileBuf) {
+                    if (entryName.toLowerCase().endsWith('.zip')) {
+                        const nested = readZipEntriesMain(fileBuf, depth + 1);
+                        nested.forEach((v, k) => entries.set(k, v));
+                    } else {
+                        entries.set(entryName, fileBuf);
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    return entries;
+}
+
+// Parse RFC-4180 CSV (Notion Database Export) into HTML table
+function parseCsvToHtmlMain(csvText, title = 'Database') {
+    const clean = String(csvText || '').replace(/^\uFEFF/, '');
+    const rows = [];
+    let currentRow = [];
+    let currentCell = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < clean.length; i++) {
+        const ch = clean[i];
+        const next = clean[i + 1];
+        if (inQuotes) {
+            if (ch === '"' && next === '"') {
+                currentCell += '"';
+                i++;
+            } else if (ch === '"') {
+                inQuotes = false;
+            } else {
+                currentCell += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ',') {
+                currentRow.push(currentCell.trim());
+                currentCell = '';
+            } else if (ch === '\r' && next === '\n') {
+                currentRow.push(currentCell.trim());
+                if (currentRow.some(c => c !== '')) rows.push(currentRow);
+                currentRow = [];
+                currentCell = '';
+                i++;
+            } else if (ch === '\n' || ch === '\r') {
+                currentRow.push(currentCell.trim());
+                if (currentRow.some(c => c !== '')) rows.push(currentRow);
+                currentRow = [];
+                currentCell = '';
+            } else {
+                currentCell += ch;
+            }
+        }
+    }
+    if (currentCell.length > 0 || currentRow.length > 0) {
+        currentRow.push(currentCell.trim());
+        if (currentRow.some(c => c !== '')) rows.push(currentRow);
+    }
+
+    if (rows.length === 0) {
+        return `<h1>${escapeHtmlMain(title)}</h1><p><br></p>`;
+    }
+
+    const headers = rows[0].map(h => stripNotionUuidMain(h));
+    const bodyRows = rows.slice(1);
+    const ths = headers.map(h => `<th>${escapeHtmlMain(h)}</th>`).join('');
+    const trs = bodyRows.map(r => {
+        const tds = headers.map((_, idx) => `<td>${escapeHtmlMain(stripNotionUuidMain(r[idx] || ''))}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+    }).join('');
+
+    return `<h1>${escapeHtmlMain(title)}</h1><p>Imported Notion Database (${bodyRows.length} records)</p><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table><p><br></p>`;
+}
+
+// Parse PowerPoint (.pptx) into structured Nosh HTML + extracted slide images
+function parsePptxBufferMain(buffer, baseName) {
+    const entries = readZipEntriesMain(buffer);
+    const assets = [];
+    const mediaMap = new Map();
+
+    // 1. Collect embedded images under ppt/media/
+    entries.forEach((fileBuf, entryName) => {
+        if (/^ppt\/media\/.+\.(png|jpe?g|gif|svg|webp)$/i.test(entryName)) {
+            const cleanBase = path.basename(entryName).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const relAssetPath = `assets/asset_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${cleanBase}`;
+            assets.push({ relPath: relAssetPath, bytes: new Uint8Array(fileBuf) });
+            mediaMap.set(entryName.toLowerCase(), relAssetPath);
+            mediaMap.set(path.basename(entryName).toLowerCase(), relAssetPath);
+        }
+    });
+
+    // 2. Find all slides sorted by slide number
+    const slideEntries = Array.from(entries.keys())
+        .filter(k => /^ppt\/slides\/slide\d+\.xml$/i.test(k))
+        .sort((a, b) => {
+            const numA = parseInt((a.match(/slide(\d+)\.xml/i) || [])[1] || '0', 10);
+            const numB = parseInt((b.match(/slide(\d+)\.xml/i) || [])[1] || '0', 10);
+            return numA - numB;
+        });
+
+    const extractParagraphRunsHtml = (pXml) => {
+        const runs = [];
+        const runRegex = /<a:r\b[^>]*>([\s\S]*?)<\/a:r>|<a:fld\b[^>]*>([\s\S]*?)<\/a:fld>|<a:br\b[^>]*\/?>/gi;
+        let m;
+        while ((m = runRegex.exec(pXml)) !== null) {
+            if (m[0].toLowerCase().startsWith('<a:br')) {
+                runs.push('<br>');
+                continue;
+            }
+            const inner = m[1] || m[2] || '';
+            const tMatches = inner.match(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/gi);
+            if (!tMatches) continue;
+            const rawText = tMatches.map(t => decodeXmlEntitiesMain(t.replace(/<\/?a:t[^>]*>/gi, ''))).join('');
+            if (!rawText) continue;
+            let htmlRun = escapeHtmlMain(rawText);
+            const rPrMatch = inner.match(/<a:rPr\b([^>]*)\/?>/i);
+            const rPrAttrs = rPrMatch ? rPrMatch[1] : '';
+            if (/\bb="(?:1|true)"/i.test(rPrAttrs)) htmlRun = `<strong>${htmlRun}</strong>`;
+            if (/\bi="(?:1|true)"/i.test(rPrAttrs)) htmlRun = `<em>${htmlRun}</em>`;
+            if (/\bu="(?:sng|dbl|heavy|1|true)"/i.test(rPrAttrs)) htmlRun = `<u>${htmlRun}</u>`;
+            runs.push(htmlRun);
+        }
+        if (runs.length === 0) {
+            const fallbackT = pXml.match(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/gi);
+            if (fallbackT) {
+                return escapeHtmlMain(fallbackT.map(t => decodeXmlEntitiesMain(t.replace(/<\/?a:t[^>]*>/gi, ''))).join(''));
+            }
+        }
+        return runs.join('');
+    };
+
+    const slideHtmlBlocks = [];
+
+    slideEntries.forEach((slidePath, idx) => {
+        const slideNum = idx + 1;
+        const slideXml = entries.get(slidePath).toString('utf8');
+
+        // Parse slide relationships for images
+        const relsPath = `ppt/slides/_rels/${path.basename(slidePath)}.rels`;
+        const rIdToAsset = new Map();
+        if (entries.has(relsPath)) {
+            const relsXml = entries.get(relsPath).toString('utf8');
+            const relRegex = /<Relationship\b([^>]*)\/?>/gi;
+            let rm;
+            while ((rm = relRegex.exec(relsXml)) !== null) {
+                const attrs = rm[1];
+                const idMatch = attrs.match(/\bId="([^"]+)"/i);
+                const targetMatch = attrs.match(/\bTarget="([^"]+)"/i);
+                if (idMatch && targetMatch) {
+                    const baseTarget = path.basename(targetMatch[1]).toLowerCase();
+                    if (mediaMap.has(baseTarget)) {
+                        rIdToAsset.set(idMatch[1], mediaMap.get(baseTarget));
+                    }
+                }
+            }
+        }
+
+        let slideTitle = '';
+        const bodyItems = [];
+        const tableBlocks = [];
+        const slideImages = [];
+
+        // Extract shapes (<p:sp>)
+        const spRegex = /<p:sp\b[\s\S]*?<\/p:sp>/gi;
+        let spMatch;
+        while ((spMatch = spRegex.exec(slideXml)) !== null) {
+            const spXml = spMatch[0];
+            const isTitle = /<p:ph\b[^>]*type="(?:title|ctrTitle)"/i.test(spXml);
+            const isSubTitle = /<p:ph\b[^>]*type="subTitle"/i.test(spXml);
+            const pRegex = /<a:p\b[\s\S]*?<\/a:p>/gi;
+            let pMatch;
+            const shapeParagraphs = [];
+
+            while ((pMatch = pRegex.exec(spXml)) !== null) {
+                const pXml = pMatch[0];
+                const pHtml = extractParagraphRunsHtml(pXml).trim();
+                if (!pHtml) continue;
+                const lvlMatch = pXml.match(/<a:pPr\b[^>]*\blvl="(\d+)"/i);
+                const level = lvlMatch ? parseInt(lvlMatch[1], 10) : 0;
+                const hasBuNone = /<a:buNone\b/i.test(pXml);
+                shapeParagraphs.push({ html: pHtml, level, isBullet: !isTitle && !isSubTitle && !hasBuNone });
+            }
+
+            if (shapeParagraphs.length === 0) continue;
+
+            if (isTitle && !slideTitle) {
+                slideTitle = shapeParagraphs.map(p => p.html.replace(/<[^>]+>/g, '')).join(' — ').trim();
+            } else if (isSubTitle) {
+                shapeParagraphs.forEach(p => bodyItems.push({ type: 'subtitle', html: p.html }));
+            } else {
+                shapeParagraphs.forEach(p => bodyItems.push({ type: p.isBullet ? 'bullet' : 'para', html: p.html, level: p.level }));
+            }
+        }
+
+        // Extract tables (<a:tbl>)
+        const tblRegex = /<a:tbl\b[\s\S]*?<\/a:tbl>/gi;
+        let tblMatch;
+        while ((tblMatch = tblRegex.exec(slideXml)) !== null) {
+            const tblXml = tblMatch[0];
+            const trRegex = /<a:tr\b[\s\S]*?<\/a:tr>/gi;
+            const rows = [];
+            let trMatch;
+            while ((trMatch = trRegex.exec(tblXml)) !== null) {
+                const trXml = trMatch[0];
+                const tcRegex = /<a:tc\b[\s\S]*?<\/a:tc>/gi;
+                const cells = [];
+                let tcMatch;
+                while ((tcMatch = tcRegex.exec(trXml)) !== null) {
+                    const tcXml = tcMatch[0];
+                    const pRegex = /<a:p\b[\s\S]*?<\/a:p>/gi;
+                    const cellParts = [];
+                    let pm;
+                    while ((pm = pRegex.exec(tcXml)) !== null) {
+                        const txt = extractParagraphRunsHtml(pm[0]).trim();
+                        if (txt) cellParts.push(txt);
+                    }
+                    cells.push(cellParts.join('<br>'));
+                }
+                if (cells.length > 0) rows.push(cells);
+            }
+            if (rows.length > 0) {
+                const head = rows[0].map(c => `<th>${c}</th>`).join('');
+                const body = rows.slice(1).map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
+                tableBlocks.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`);
+            }
+        }
+
+        // Extract pictures (<p:pic>)
+        const picRegex = /<p:pic\b[\s\S]*?<\/p:pic>/gi;
+        let picMatch;
+        while ((picMatch = picRegex.exec(slideXml)) !== null) {
+            const blipMatch = picMatch[0].match(/\br:embed="([^"]+)"/i);
+            if (blipMatch && rIdToAsset.has(blipMatch[1])) {
+                const assetRel = rIdToAsset.get(blipMatch[1]);
+                if (!slideImages.includes(assetRel)) {
+                    slideImages.push(assetRel);
+                }
+            }
+        }
+
+        // Extract speaker notes if present (ppt/notesSlides/notesSlideN.xml)
+        let notesText = '';
+        const notesPath = `ppt/notesSlides/notesSlide${slideNum}.xml`;
+        if (entries.has(notesPath)) {
+            const notesXml = entries.get(notesPath).toString('utf8');
+            const spNotesRegex = /<p:sp\b[\s\S]*?<\/p:sp>/gi;
+            const noteParas = [];
+            let nm;
+            while ((nm = spNotesRegex.exec(notesXml)) !== null) {
+                if (/<p:ph\b[^>]*type="body"/i.test(nm[0])) {
+                    const pRegex = /<a:p\b[\s\S]*?<\/a:p>/gi;
+                    let pm;
+                    while ((pm = pRegex.exec(nm[0])) !== null) {
+                        const txt = extractParagraphRunsHtml(pm[0]).trim();
+                        if (txt) noteParas.push(txt);
+                    }
+                }
+            }
+            if (noteParas.length > 0) {
+                notesText = noteParas.join('<br>');
+            }
+        }
+
+        // Fallback title if slide had no explicit title placeholder
+        if (!slideTitle && bodyItems.length > 0) {
+            const first = bodyItems.shift();
+            slideTitle = first.html.replace(/<[^>]+>/g, '').trim();
+        }
+
+        const headingTitle = slideTitle ? `Slide ${slideNum} — ${escapeHtmlMain(slideTitle)}` : `Slide ${slideNum}`;
+        const slideParts = [`<h2>${headingTitle}</h2>`];
+
+        let bulletBuffer = [];
+        const flushBullets = () => {
+            if (bulletBuffer.length > 0) {
+                slideParts.push(`<ul>${bulletBuffer.join('')}</ul>`);
+                bulletBuffer = [];
+            }
+        };
+
+        bodyItems.forEach(item => {
+            if (item.type === 'subtitle') {
+                flushBullets();
+                slideParts.push(`<p><strong>${item.html}</strong></p>`);
+            } else if (item.type === 'bullet') {
+                const indentStyle = item.level > 0 ? ` style="margin-left:${item.level * 18}px"` : '';
+                bulletBuffer.push(`<li${indentStyle}>${item.html}</li>`);
+            } else {
+                flushBullets();
+                slideParts.push(`<p>${item.html}</p>`);
+            }
+        });
+        flushBullets();
+
+        tableBlocks.forEach(tbl => slideParts.push(tbl));
+        slideImages.forEach(rel => {
+            slideParts.push(`<div class="media-container resizable" contenteditable="false"><img src="${rel}" data-asset-rel="${rel}" alt="Slide ${slideNum}" style="max-width: 100%;"></div>`);
+        });
+        if (notesText) {
+            slideParts.push(`<blockquote><strong>Speaker notes:</strong> ${notesText}</blockquote>`);
+        }
+
+        slideHtmlBlocks.push(`<div class="imported-slide-card">${slideParts.join('\n')}</div>`);
+    });
+
+    const cleanTitle = stripNotionUuidMain(baseName) || 'Presentation';
+    const html = `<h1>${escapeHtmlMain(cleanTitle)}</h1>\n${slideHtmlBlocks.join('\n<hr>\n')}<p><br></p>`;
+    return { title: cleanTitle, html, assets };
+}
+
+// Parse Word (.docx) into structured Nosh HTML
+function parseDocxBufferMain(buffer, baseName) {
+    const entries = readZipEntriesMain(buffer);
+    const cleanTitle = stripNotionUuidMain(baseName) || 'Document';
+    if (!entries.has('word/document.xml')) {
+        return { title: cleanTitle, html: `<h1>${escapeHtmlMain(cleanTitle)}</h1><p><br></p>`, assets: [] };
+    }
+    const xml = entries.get('word/document.xml').toString('utf8');
+    const parts = [`<h1>${escapeHtmlMain(cleanTitle)}</h1>`];
+    const pRegex = /<w:p\b[\s\S]*?<\/w:p>/gi;
+    let m;
+    while ((m = pRegex.exec(xml)) !== null) {
+        const pXml = m[0];
+        const tMatches = pXml.match(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/gi);
+        if (!tMatches) continue;
+        const text = tMatches.map(t => decodeXmlEntitiesMain(t.replace(/<\/?w:t[^>]*>/gi, ''))).join('').trim();
+        if (!text) continue;
+        const styleMatch = pXml.match(/<w:pStyle\b[^>]*w:val="([^"]+)"/i);
+        const styleVal = styleMatch ? styleMatch[1].toLowerCase() : '';
+        if (styleVal.includes('heading1') || styleVal === 'title') {
+            parts.push(`<h2>${escapeHtmlMain(text)}</h2>`);
+        } else if (styleVal.includes('heading2')) {
+            parts.push(`<h2>${escapeHtmlMain(text)}</h2>`);
+        } else if (styleVal.includes('heading3')) {
+            parts.push(`<h3>${escapeHtmlMain(text)}</h3>`);
+        } else if (/<w:numPr\b/i.test(pXml)) {
+            parts.push(`<ul><li>${escapeHtmlMain(text)}</li></ul>`);
+        } else {
+            parts.push(`<p>${escapeHtmlMain(text)}</p>`);
+        }
+    }
+    parts.push('<p><br></p>');
+    return { title: cleanTitle, html: parts.join('\n'), assets: [] };
+}
+
+// Parse PDF (.pdf) buffer into structured Nosh HTML (supports FlateDecode, ObjStm, ToUnicode CMap, TJ/Tj, UTF-16BE & WinAnsi)
+function parsePdfBufferMain(buffer, baseName) {
+    const cleanTitle = stripNotionUuidMain(baseName) || 'PDF Document';
+    const rawStr = buffer.toString('latin1');
+
+    // Helper: inflate FlateDecode stream buffer
+    const inflatePdfStream = (rawStreamBuf) => {
+        let trimmed = rawStreamBuf;
+        if (trimmed.length >= 2 && trimmed[0] === 0x0d && trimmed[1] === 0x0a) trimmed = trimmed.slice(2);
+        else if (trimmed.length >= 1 && (trimmed[0] === 0x0a || trimmed[0] === 0x0d)) trimmed = trimmed.slice(1);
+        if (trimmed.length >= 2 && trimmed[trimmed.length - 2] === 0x0d && trimmed[trimmed.length - 1] === 0x0a) trimmed = trimmed.slice(0, -2);
+        else if (trimmed.length >= 1 && (trimmed[trimmed.length - 1] === 0x0a || trimmed[trimmed.length - 1] === 0x0d)) trimmed = trimmed.slice(0, -1);
+
+        try {
+            return zlib.inflateSync(trimmed);
+        } catch (_) {
+            try {
+                return zlib.inflateRawSync(trimmed);
+            } catch (_2) {
+                return null;
+            }
+        }
+    };
+
+    // 1. Decompress all streams and collect ToUnicode CMaps + content streams
+    const globalUnicodeMap = new Map();
+    const decompressedStreams = [];
+
+    const streamRegex = /<<([\s\S]*?)>>\s*stream\b/g;
+    let sm;
+    while ((sm = streamRegex.exec(rawStr)) !== null) {
+        const dict = sm[1];
+        const streamStart = sm.index + sm[0].length;
+        const endPos = rawStr.indexOf('endstream', streamStart);
+        if (endPos === -1) continue;
+
+        // Skip images and binary font programs
+        if (/\/Subtype\s*\/Image\b/i.test(dict) || /\/Length1\b/i.test(dict) || /\/Subtype\s*\/Type1C\b/i.test(dict) || /\/Subtype\s*\/CIDFontType0C\b/i.test(dict)) {
+            continue;
+        }
+
+        const rawSlice = buffer.slice(streamStart, endPos);
+        let decodedBuf = rawSlice;
+        if (/\/FlateDecode\b/i.test(dict)) {
+            const inf = inflatePdfStream(rawSlice);
+            if (!inf) continue;
+            decodedBuf = inf;
+        }
+
+        const textContent = decodedBuf.toString('latin1');
+
+        // Parse ToUnicode CMap if present
+        if (textContent.includes('begincmap') || textContent.includes('beginbfchar') || textContent.includes('beginbfrange')) {
+            const bfCharRegex = /beginbfchar([\s\S]*?)endbfchar/g;
+            let bfc;
+            while ((bfc = bfCharRegex.exec(textContent)) !== null) {
+                const pairRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+                let pm;
+                while ((pm = pairRegex.exec(bfc[1])) !== null) {
+                    const srcCode = parseInt(pm[1], 16);
+                    const dstHex = pm[2];
+                    let str = '';
+                    for (let k = 0; k < dstHex.length; k += 4) {
+                        const cp = parseInt(dstHex.slice(k, k + 4), 16);
+                        if (!isNaN(cp)) str += String.fromCodePoint(cp);
+                    }
+                    if (str) globalUnicodeMap.set(srcCode, str);
+                }
+            }
+
+            const bfRangeRegex = /beginbfrange([\s\S]*?)endbfrange/g;
+            let bfr;
+            while ((bfr = bfRangeRegex.exec(textContent)) !== null) {
+                const rangeLineRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+                let rm;
+                while ((rm = rangeLineRegex.exec(bfr[1])) !== null) {
+                    const startCode = parseInt(rm[1], 16);
+                    const endCode = parseInt(rm[2], 16);
+                    let targetCp = parseInt(rm[3], 16);
+                    for (let c = startCode; c <= endCode && c - startCode < 1024; c++) {
+                        try {
+                            globalUnicodeMap.set(c, String.fromCodePoint(targetCp));
+                        } catch (_) {}
+                        targetCp++;
+                    }
+                }
+            }
+            continue;
+        }
+
+        if (/\bBT\b[\s\S]*?\bET\b/.test(textContent)) {
+            decompressedStreams.push(textContent);
+        }
+    }
+
+    const hasWideCodes = Array.from(globalUnicodeMap.keys()).some(k => k > 255);
+
+    const decodePdfLiteralString = (lit) => {
+        let bytes = [];
+        for (let i = 0; i < lit.length; i++) {
+            const ch = lit[i];
+            if (ch === '\\') {
+                const next = lit[++i];
+                if (next === 'n') bytes.push(10);
+                else if (next === 'r') bytes.push(13);
+                else if (next === 't') bytes.push(9);
+                else if (next === 'b') bytes.push(8);
+                else if (next === 'f') bytes.push(12);
+                else if (next === '(' || next === ')' || next === '\\') bytes.push(next.charCodeAt(0));
+                else if (next >= '0' && next <= '7') {
+                    let oct = next;
+                    if (lit[i + 1] >= '0' && lit[i + 1] <= '7') oct += lit[++i];
+                    if (lit[i + 1] >= '0' && lit[i + 1] <= '7') oct += lit[++i];
+                    bytes.push(parseInt(oct, 8));
+                } else if (next !== undefined) {
+                    bytes.push(next.charCodeAt(0));
+                }
+            } else {
+                bytes.push(ch.charCodeAt(0));
+            }
+        }
+        // UTF-16BE BOM check
+        if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+            let out = '';
+            for (let j = 2; j + 1 < bytes.length; j += 2) {
+                out += String.fromCharCode((bytes[j] << 8) | bytes[j + 1]);
+            }
+            return out;
+        }
+        if (hasWideCodes && bytes.length >= 2 && bytes.length % 2 === 0) {
+            let wide = '';
+            let hits = 0;
+            for (let j = 0; j + 1 < bytes.length; j += 2) {
+                const code = (bytes[j] << 8) | bytes[j + 1];
+                if (globalUnicodeMap.has(code)) { wide += globalUnicodeMap.get(code); hits++; }
+            }
+            if (hits >= bytes.length / 4) return wide;
+        }
+        return bytes.map(b => {
+            if (globalUnicodeMap.has(b)) return globalUnicodeMap.get(b);
+            return String.fromCharCode(b);
+        }).join('');
+    };
+
+    const decodePdfHexString = (hex) => {
+        const cleanHex = hex.replace(/\s+/g, '');
+        if (cleanHex.toUpperCase().startsWith('FEFF')) {
+            let out = '';
+            for (let i = 4; i + 3 < cleanHex.length; i += 4) {
+                const cp = parseInt(cleanHex.slice(i, i + 4), 16);
+                if (!isNaN(cp)) out += String.fromCodePoint(cp);
+            }
+            return out;
+        }
+        if (cleanHex.length % 4 === 0 && globalUnicodeMap.size > 0) {
+            let out4 = '';
+            let matched4 = 0;
+            for (let i = 0; i < cleanHex.length; i += 4) {
+                const code = parseInt(cleanHex.slice(i, i + 4), 16);
+                if (globalUnicodeMap.has(code)) {
+                    out4 += globalUnicodeMap.get(code);
+                    matched4++;
+                } else if (code >= 32 && code < 0xd800) {
+                    out4 += String.fromCharCode(code);
+                }
+            }
+            if (matched4 > 0) return out4;
+        }
+        let out2 = '';
+        for (let i = 0; i < cleanHex.length; i += 2) {
+            const code = parseInt(cleanHex.slice(i, i + 2), 16);
+            if (globalUnicodeMap.has(code)) out2 += globalUnicodeMap.get(code);
+            else if (code >= 32) out2 += String.fromCharCode(code);
+        }
+        return out2;
+    };
+
+    const pageBlocks = [];
+    decompressedStreams.forEach((streamText) => {
+        const lines = [];
+        let currentLine = '';
+        let tfSize = 12;
+        let tmScale = 1;
+        let lastY = null;
+        let matrixFresh = true;
+        const pushLine = () => {
+            if (currentLine.trim()) {
+                lines.push({ text: currentLine.trim(), fontSize: Math.round(Math.abs(tfSize * tmScale) * 10) / 10 || 12 });
+            }
+            currentLine = '';
+        };
+        const addSpace = () => {
+            if (currentLine && !currentLine.endsWith(' ')) currentLine += ' ';
+        };
+
+        const btRegex = /\bBT\b([\s\S]*?)\bET\b/g;
+        let btMatch;
+        while ((btMatch = btRegex.exec(streamText)) !== null) {
+            const block = btMatch[1];
+            matrixFresh = true;
+            tmScale = 1;
+            // 1: Tf size | 2-7: Tm a b c d e f | 8-9: Td/TD dx dy | 10: TJ array | 11: literal Tj/'/" | 12: hex Tj
+            const tokenRegex = /\/[^\s/\[\]()<>]+\s+(-?[\d.]+)\s+Tf|(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm|(-?[\d.]+)\s+(-?[\d.]+)\s+T[dD]\b|\bT\*|\[((?:\\.|[^\]\\])*)\]\s*TJ|\(((?:\\.|[^\\()])*)\)\s*(?:Tj|'|")|<([0-9a-fA-F\s]+)>\s*Tj/g;
+            let tm;
+            while ((tm = tokenRegex.exec(block)) !== null) {
+                if (tm[1] !== undefined) {
+                    tfSize = Math.abs(parseFloat(tm[1])) || tfSize;
+                } else if (tm[2] !== undefined) {
+                    const scale = Math.abs(parseFloat(tm[5])) || Math.abs(parseFloat(tm[2])) || 1;
+                    const y = parseFloat(tm[7]);
+                    if (lastY !== null && Math.abs(y - lastY) > 1) pushLine();
+                    tmScale = scale;
+                    lastY = y;
+                    matrixFresh = false;
+                } else if (tm[8] !== undefined) {
+                    const dx = parseFloat(tm[8]);
+                    const dy = parseFloat(tm[9]);
+                    if (matrixFresh) {
+                        // First Td after BT is relative to the identity matrix, i.e. absolute
+                        if (lastY !== null && Math.abs(dy - lastY) > 1) pushLine();
+                        else if (dx !== 0) addSpace();
+                        lastY = dy;
+                        matrixFresh = false;
+                    } else if (Math.abs(dy) > 0.5) {
+                        pushLine();
+                        if (lastY !== null) lastY += dy * tmScale;
+                    } else if (dx !== 0) {
+                        addSpace();
+                    }
+                } else if (tm[0] === 'T*') {
+                    pushLine();
+                } else if (tm[10] !== undefined) {
+                    const itemRegex = /\(((?:\\.|[^\\()])*)\)|<([0-9a-fA-F\s]+)>|(-?[\d.]+)/g;
+                    let im;
+                    while ((im = itemRegex.exec(tm[10])) !== null) {
+                        if (im[1] !== undefined) {
+                            currentLine += decodePdfLiteralString(im[1]);
+                        } else if (im[2] !== undefined) {
+                            currentLine += decodePdfHexString(im[2]);
+                        } else if (im[3] !== undefined && parseFloat(im[3]) < -120) {
+                            addSpace();
+                        }
+                    }
+                } else if (tm[11] !== undefined) {
+                    if (/['"]\s*$/.test(tm[0])) pushLine();
+                    currentLine += decodePdfLiteralString(tm[11]);
+                } else if (tm[12] !== undefined) {
+                    currentLine += decodePdfHexString(tm[12]);
+                }
+            }
+        }
+        pushLine();
+
+        const cleanedLines = lines
+            .map(l => ({ text: l.text.replace(/\s+/g, ' ').trim(), fontSize: l.fontSize }))
+            .filter(l => l.text.length > 0 && /[\p{L}\p{N}]/u.test(l.text));
+        if (cleanedLines.length === 0) return;
+
+        const sizes = cleanedLines.map(l => l.fontSize).sort((a, b) => a - b);
+        const median = sizes[Math.floor(sizes.length / 2)] || 12;
+        const pageParts = [`<div class="imported-pdf-page"><div class="imported-pdf-page-badge">Page ${pageBlocks.length + 1}</div>`];
+        let para = [];
+        let bullets = [];
+        const flushPara = () => {
+            if (para.length) {
+                const joined = para.join(' ').replace(/([a-zçğıöşü])- ([a-zçğıöşü])/g, '$1$2');
+                pageParts.push(`<p>${escapeHtmlMain(joined)}</p>`);
+                para = [];
+            }
+        };
+        const flushBullets = () => {
+            if (bullets.length) {
+                pageParts.push(`<ul>${bullets.map(b => `<li>${escapeHtmlMain(b)}</li>`).join('')}</ul>`);
+                bullets = [];
+            }
+        };
+
+        cleanedLines.forEach(item => {
+            const ratio = item.fontSize / median;
+            const bulletMatch = item.text.match(/^(?:[•▪◦●■►▸]\s*|[-–*]\s+)(.+)$/);
+            if (ratio >= 1.45 && item.text.length < 140) {
+                flushPara(); flushBullets();
+                pageParts.push(`<h2>${escapeHtmlMain(item.text)}</h2>`);
+            } else if (ratio >= 1.15 && item.text.length < 140) {
+                flushPara(); flushBullets();
+                pageParts.push(`<h3>${escapeHtmlMain(item.text)}</h3>`);
+            } else if (bulletMatch) {
+                flushPara();
+                bullets.push(bulletMatch[1]);
+            } else if (bullets.length && para.length === 0 && /^[a-zçğıöşü(]/.test(item.text)) {
+                // Wrapped continuation of the previous bullet
+                bullets[bullets.length - 1] += ` ${item.text}`;
+            } else {
+                flushBullets();
+                if (/^\d+[.)]\s+/.test(item.text)) flushPara();
+                para.push(item.text);
+                if (/[.!?:;]$/.test(item.text)) flushPara();
+            }
+        });
+        flushPara();
+        flushBullets();
+        pageParts.push('</div>');
+        pageBlocks.push(pageParts.join('\n'));
+    });
+
+    const bodyHtml = pageBlocks.length > 0
+        ? pageBlocks.join('\n')
+        : `<blockquote><strong>No selectable text found.</strong> ${escapeHtmlMain(cleanTitle)}.pdf looks like a scanned (image-only) or font-encrypted PDF, so there is no text layer to import.</blockquote>`;
+
+    return {
+        title: cleanTitle,
+        html: `<h1>${escapeHtmlMain(cleanTitle)}</h1>\n${bodyHtml}<p><br></p>`,
+        assets: []
+    };
+}
+
+// Parse Notion (.zip) Archive containing .md, .html, .csv, and image assets
+function parseNotionZipBufferMain(buffer, zipBaseName) {
+    const entries = readZipEntriesMain(buffer);
+    const assets = [];
+    const assetPathMap = new Map();
+    const notes = [];
+
+    // 1. Extract all image/media files first so we can rewrite relative paths in .md and .html
+    entries.forEach((fileBuf, entryName) => {
+        if (/\.(png|jpe?g|gif|svg|webp)$/i.test(entryName)) {
+            const cleanBase = path.basename(entryName).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const relAssetPath = `assets/asset_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${cleanBase}`;
+            assets.push({ relPath: relAssetPath, bytes: new Uint8Array(fileBuf) });
+            assetPathMap.set(entryName.toLowerCase(), relAssetPath);
+            assetPathMap.set(decodeURIComponent(entryName).toLowerCase(), relAssetPath);
+            assetPathMap.set(path.basename(entryName).toLowerCase(), relAssetPath);
+            assetPathMap.set(decodeURIComponent(path.basename(entryName)).toLowerCase(), relAssetPath);
+        }
+    });
+
+    // 2. Process .md, .html, and .csv files inside the Notion export
+    entries.forEach((fileBuf, entryName) => {
+        const ext = path.extname(entryName).toLowerCase();
+        if (!['.md', '.markdown', '.html', '.htm', '.csv'].includes(ext)) return;
+
+        const rawName = path.basename(entryName, ext);
+        const cleanTitle = stripNotionUuidMain(rawName) || stripNotionUuidMain(zipBaseName) || 'Notion Note';
+        const parts = entryName.split('/');
+        let folderName = null;
+        if (parts.length > 1) {
+            folderName = stripNotionUuidMain(parts[0]) || null;
+        }
+
+        let textContent = fileBuf.toString('utf8');
+
+        // Rewrite relative image paths (resolved against this file's folder) and Notion page links
+        const entryDir = path.posix.dirname(entryName);
+        const resolveAsset = (target) => {
+            if (!target || /^(https?:|data:|mailto:)/i.test(target)) return null;
+            let decoded = target;
+            try { decoded = decodeURIComponent(target); } catch (_) {}
+            decoded = decoded.split(/[?#]/)[0];
+            const full = path.posix.normalize(path.posix.join(entryDir, decoded)).toLowerCase();
+            return assetPathMap.get(full) || assetPathMap.get(path.posix.basename(decoded).toLowerCase()) || null;
+        };
+        textContent = textContent
+            .replace(/(!\[[^\]]*\]\()(<[^>]+>|[^)\s]+)((?:\s+"[^"]*")?\))/g, (full, pre, target, post) => {
+                const rel = resolveAsset(target.replace(/^<|>$/g, ''));
+                return rel ? `${pre}${rel}${post}` : full;
+            })
+            .replace(/(<img\b[^>]*?\bsrc=")([^"]+)(")/gi, (full, pre, target, post) => {
+                const rel = resolveAsset(target);
+                return rel ? `${pre}${rel}${post}` : full;
+            })
+            .replace(/(<a\b[^>]*?\bhref=")([^"]+\.(?:png|jpe?g|gif|svg|webp))(")/gi, (full, pre, target, post) => {
+                const rel = resolveAsset(target);
+                return rel ? `${pre}${rel}${post}` : full;
+            });
+
+        if (ext === '.md' || ext === '.markdown') {
+            // Links to other Notion pages become Nosh wiki-links: [Title](Title%20abc123.md) -> [[Title]]
+            textContent = textContent.replace(/(^|[^!])\[([^\]]+)\]\(([^)\s]+\.md)\)/g, (full, prefix, label, target) => {
+                let decoded = target;
+                try { decoded = decodeURIComponent(target); } catch (_) {}
+                const linked = stripNotionUuidMain(path.posix.basename(decoded, '.md')) || label;
+                return `${prefix}[[${linked}]]`;
+            });
+        }
+
+        if (ext === '.csv') {
+            notes.push({
+                title: cleanTitle,
+                folderName,
+                ext: '.csv',
+                html: parseCsvToHtmlMain(textContent, cleanTitle)
+            });
+        } else if (ext === '.md' || ext === '.markdown') {
+            notes.push({
+                title: cleanTitle,
+                folderName,
+                ext: '.md',
+                rawMarkdown: textContent
+            });
+        } else if (ext === '.html' || ext === '.htm') {
+            notes.push({
+                title: cleanTitle,
+                folderName,
+                ext: '.html',
+                rawHtml: textContent
+            });
+        }
+    });
+
+    return {
+        sourceType: 'notion-zip',
+        defaultFolder: stripNotionUuidMain(zipBaseName) || 'Notion Import',
+        notes,
+        assets
+    };
+}
+
+function parseSingleFileBufferMain(fileName, buffer) {
+    const ext = path.extname(fileName).toLowerCase();
+    const rawBaseName = path.basename(fileName, ext);
+    const cleanBaseName = stripNotionUuidMain(rawBaseName) || rawBaseName || 'Imported Note';
+
+    if (ext === '.pptx') {
+        const res = parsePptxBufferMain(buffer, cleanBaseName);
+        return {
+            isBatchImport: true,
+            sourceType: 'pptx',
+            notes: [{ title: res.title, html: res.html, ext }],
+            assets: res.assets
+        };
+    }
+    if (ext === '.pdf') {
+        const res = parsePdfBufferMain(buffer, cleanBaseName);
+        return {
+            isBatchImport: true,
+            sourceType: 'pdf',
+            notes: [{ title: res.title, html: res.html, ext }],
+            assets: res.assets
+        };
+    }
+    if (ext === '.docx') {
+        const res = parseDocxBufferMain(buffer, cleanBaseName);
+        return {
+            isBatchImport: true,
+            sourceType: 'docx',
+            notes: [{ title: res.title, html: res.html, ext }],
+            assets: res.assets
+        };
+    }
+    if (ext === '.zip') {
+        const res = parseNotionZipBufferMain(buffer, cleanBaseName);
+        return {
+            isBatchImport: true,
+            sourceType: 'notion-zip',
+            defaultFolder: res.defaultFolder,
+            notes: res.notes,
+            assets: res.assets
+        };
+    }
+    if (ext === '.csv') {
+        const csvText = buffer.toString('utf8');
+        return {
+            isBatchImport: true,
+            sourceType: 'notion-csv',
+            notes: [{ title: cleanBaseName, html: parseCsvToHtmlMain(csvText, cleanBaseName), ext }],
+            assets: []
+        };
+    }
+    if (ext === '.md' || ext === '.markdown') {
+        return {
+            isBatchImport: true,
+            sourceType: 'markdown',
+            notes: [{ title: cleanBaseName, rawMarkdown: buffer.toString('utf8'), ext }],
+            assets: []
+        };
+    }
+    if (ext === '.html' || ext === '.htm') {
+        return {
+            isBatchImport: true,
+            sourceType: 'html',
+            notes: [{ title: cleanBaseName, rawHtml: buffer.toString('utf8'), ext }],
+            assets: []
+        };
+    }
+
+    const content = buffer.toString('utf8');
+    return {
+        fileName: cleanBaseName,
+        content,
+        ext
+    };
+}
+
+ipcMain.handle('open-file-dialog', async (event, options = null) => {
+    // Mode 0: Parse a local file by path (drag-and-drop from OS explorer)
+    if (options && options.filePath && fs.existsSync(options.filePath)) {
+        try {
+            const buf = fs.readFileSync(options.filePath);
+            return parseSingleFileBufferMain(options.fileName || path.basename(options.filePath), buf);
+        } catch (err) {
+            console.error('Error parsing file by path:', err);
+            return { error: err.message || 'Failed to parse file' };
+        }
+    }
+
+    // Mode 1: Parse an in-memory file buffer (used by drag-and-drop & clipboard file paste)
+    if (options && options.mode === 'parse-buffer' && options.fileName && options.bytes) {
+        try {
+            const buf = Buffer.from(options.bytes);
+            return parseSingleFileBufferMain(options.fileName, buf);
+        } catch (err) {
+            console.error('Error parsing dropped/pasted file buffer:', err);
+            return { error: err.message || 'Failed to parse file' };
+        }
+    }
+
+    // Mode 2: Native file dialog (with optional filterType from Dashboard Import Hub)
+    const filterType = (options && options.filterType) || 'all';
+    const filterMap = {
+        md: [
+            { name: 'Markdown & Notion Markdown (*.md, *.markdown)', extensions: ['md', 'markdown'] },
+            { name: 'All Supported Formats', extensions: ['nsh', 'md', 'markdown', 'pdf', 'pptx', 'zip', 'html', 'htm', 'csv', 'docx', 'txt'] }
+        ],
+        pdf: [
+            { name: 'PDF Documents (*.pdf)', extensions: ['pdf'] },
+            { name: 'All Supported Formats', extensions: ['nsh', 'md', 'markdown', 'pdf', 'pptx', 'zip', 'html', 'htm', 'csv', 'docx', 'txt'] }
+        ],
+        pptx: [
+            { name: 'PowerPoint Presentations (*.pptx)', extensions: ['pptx'] },
+            { name: 'All Supported Formats', extensions: ['nsh', 'md', 'markdown', 'pdf', 'pptx', 'zip', 'html', 'htm', 'csv', 'docx', 'txt'] }
+        ],
+        notion: [
+            { name: 'Notion Exports (*.zip, *.md, *.html, *.csv)', extensions: ['zip', 'md', 'markdown', 'html', 'htm', 'csv'] },
+            { name: 'All Supported Formats', extensions: ['nsh', 'md', 'markdown', 'pdf', 'pptx', 'zip', 'html', 'htm', 'csv', 'docx', 'txt'] }
+        ],
+        all: [
+            { name: 'All Supported Documents (*.nsh, *.md, *.pdf, *.pptx, *.zip, *.html, *.csv, *.docx, *.txt)', extensions: ['nsh', 'md', 'markdown', 'pdf', 'pptx', 'zip', 'html', 'htm', 'csv', 'docx', 'txt'] },
+            { name: 'Markdown (*.md)', extensions: ['md', 'markdown'] },
+            { name: 'PDF Documents (*.pdf)', extensions: ['pdf'] },
+            { name: 'PowerPoint Presentations (*.pptx)', extensions: ['pptx'] },
+            { name: 'Notion Export (*.zip, *.html, *.md, *.csv)', extensions: ['zip', 'html', 'htm', 'md', 'csv'] },
             { name: 'Nosh Notes (*.nsh)', extensions: ['nsh'] },
             { name: 'All Files', extensions: ['*'] }
         ]
+    };
+
+    const result = await dialog.showOpenDialog(win, {
+        title: 'Import Document or Open Note (.md, .pdf, .pptx, Notion .zip/.html/.csv, .nsh)',
+        properties: ['openFile', 'multiSelections'],
+        filters: filterMap[filterType] || filterMap.all
     });
 
     if (!result.canceled && result.filePaths.length > 0) {
-        const filePath = result.filePaths[0];
-        const content = fs.readFileSync(filePath, 'utf8');
+        // Single legacy .nsh / .txt file when called with no options
+        if (!options && result.filePaths.length === 1) {
+            const singlePath = result.filePaths[0];
+            const singleExt = path.extname(singlePath).toLowerCase();
+            if (singleExt === '.nsh' || singleExt === '.txt') {
+                const content = fs.readFileSync(singlePath, 'utf8');
+                return {
+                    filePath: singlePath,
+                    fileName: path.basename(singlePath, singleExt),
+                    content
+                };
+            }
+        }
+
+        const aggregatedNotes = [];
+        const aggregatedAssets = [];
+        let primaryFolder = null;
+
+        for (const filePath of result.filePaths) {
+            const buf = fs.readFileSync(filePath);
+            const parsed = parseSingleFileBufferMain(path.basename(filePath), buf);
+            if (parsed && parsed.isBatchImport) {
+                if (parsed.defaultFolder && !primaryFolder) primaryFolder = parsed.defaultFolder;
+                if (Array.isArray(parsed.notes)) aggregatedNotes.push(...parsed.notes);
+                if (Array.isArray(parsed.assets)) aggregatedAssets.push(...parsed.assets);
+            } else if (parsed && parsed.fileName) {
+                aggregatedNotes.push({
+                    title: parsed.fileName,
+                    html: parsed.ext === '.nsh' ? parsed.content : `<h1>${escapeHtmlMain(parsed.fileName)}</h1><p>${escapeHtmlMain(parsed.content).replace(/\r?\n/g, '<br>')}</p>`,
+                    ext: parsed.ext
+                });
+            }
+        }
+
         return {
-            filePath,
-            fileName: path.basename(filePath, path.extname(filePath)),
-            content
+            isBatchImport: true,
+            defaultFolder: primaryFolder,
+            notes: aggregatedNotes,
+            assets: aggregatedAssets
         };
     }
     return null;
@@ -742,6 +1772,36 @@ ipcMain.handle('export-pdf', async (event, { defaultName, title, htmlContent, ou
             background: #f1f5f9;
             font-weight: 600;
             color: #1e293b;
+        }
+        code.inline-code, :not(pre) > code {
+            font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 9.5pt;
+            padding: 1pt 4pt;
+            border-radius: 3pt;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #0f172a;
+        }
+        .claude-embedded-diagram {
+            margin: 12pt 0;
+            padding: 12pt 14pt 8pt;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 6pt;
+            text-align: center;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .claude-embedded-diagram svg {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        .claude-diagram-caption {
+            margin-top: 6pt;
+            font-size: 9pt;
+            color: #475569;
         }
         /* Checklists */
         .checklist-item {

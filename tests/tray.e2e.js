@@ -34,8 +34,15 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit } =
         s = await launchNosh(sandbox);
         const info = await trayOp(s, 'info');
         check('tray icon exists', info.active);
+        const validQuickNote = info.labels[1] === 'Quick note' || info.labels[1] === 'Quick note (Ctrl+Alt+N is used by another app)';
         check('tray menu has the expected entries',
-            JSON.stringify(info.labels) === JSON.stringify(['Open Nosh', 'Quick note', 'separator', 'Keep running when the window is closed', 'separator', 'Quit Nosh']), info.labels);
+            validQuickNote &&
+            info.labels[0] === 'Open Nosh' &&
+            info.labels[2] === 'separator' &&
+            info.labels[3] === 'Keep running when the window is closed' &&
+            info.labels[4] === 'separator' &&
+            info.labels[5] === 'Quit Nosh',
+            info.labels);
         check('keep-running is on by default', info.keepChecked && info.prefs.keepInTray === true, info.prefs);
 
         // Closing the window (what the title-bar X sends) hides it instead of exiting

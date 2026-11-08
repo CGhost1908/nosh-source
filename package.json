@@ -1,6 +1,6 @@
 {
   "name": "nosh",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "High-craft note & code workstation for developers and thinkers",
   "main": "main.js",
   "license": "MIT",
@@ -63,7 +63,8 @@
     "express": "^4.21.2",
     "googleapis": "^144.0.0",
     "highlight.js": "^11.10.0",
-    "interactjs": "^1.10.27"
+    "interactjs": "^1.10.27",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "electron": "^40.4.1",
