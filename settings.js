@@ -250,13 +250,18 @@ async function renderTrashList() {
 
     trashNotes.forEach(name => {
         const item = document.createElement('div');
-        item.className = 'trash-item-row';
-        item.innerHTML = `
+        item.className = 'trash-note-card';
+        const row = document.createElement('div');
+        row.className = 'trash-item-row';
+        row.innerHTML = `
             <div class="trash-item-info">
                 <iconify-icon icon="solar:document-text-linear" style="font-size: 18px; color: var(--text-muted);"></iconify-icon>
                 <span class="trash-item-title">${escapeHtml(name)}</span>
             </div>
             <div class="trash-item-actions">
+                <button class="btn-secondary trash-preview-btn" type="button" style="padding: 4px 10px; font-size: 12px;">
+                    <iconify-icon icon="solar:eye-linear"></iconify-icon> Preview
+                </button>
                 <button class="btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="handleRestoreTrashNote('${escapeHtml(name)}')">
                     <iconify-icon icon="solar:restart-linear"></iconify-icon> Restore
                 </button>
@@ -265,8 +270,39 @@ async function renderTrashList() {
                 </button>
             </div>
         `;
+        const preview = document.createElement('div');
+        preview.className = 'trash-note-preview';
+        preview.hidden = true;
+        item.append(row, preview);
+        row.querySelector('.trash-preview-btn').addEventListener('click', () => toggleTrashNotePreview(name, item));
         listEl.appendChild(item);
     });
+}
+
+async function toggleTrashNotePreview(noteName, item) {
+    const preview = item.querySelector('.trash-note-preview');
+    const button = item.querySelector('.trash-preview-btn');
+    if (!preview || !button) return;
+
+    preview.hidden = !preview.hidden;
+    button.innerHTML = preview.hidden
+        ? '<iconify-icon icon="solar:eye-linear"></iconify-icon> Preview'
+        : '<iconify-icon icon="solar:eye-closed-linear"></iconify-icon> Hide Preview';
+    if (preview.hidden || preview.dataset.loaded === 'true') return;
+
+    try {
+        const safeName = path.basename(noteName);
+        const trashPath = path.join(savesDir, '.trash', `${safeName}.nsh`);
+        const html = await fsPromises.readFile(trashPath, 'utf8');
+        if (typeof buildHistoryRenderedPreview === 'function') {
+            buildHistoryRenderedPreview(preview, html, html);
+            preview.dataset.loaded = 'true';
+        } else {
+            preview.textContent = 'Preview is unavailable.';
+        }
+    } catch (err) {
+        preview.textContent = 'Could not read this note.';
+    }
 }
 
 async function handleRestoreTrashNote(noteName) {

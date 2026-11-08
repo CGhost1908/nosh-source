@@ -2,7 +2,7 @@
 
 const commandPaletteActions = [
     { id: 'new-note', title: 'New Note', category: 'Action', icon: 'solar:pen-new-square-linear', action: () => createNewFile() },
-    { id: 'new-folder', title: 'New Folder', category: 'Action', icon: 'solar:folder-add-linear', action: () => openCreateFolderModal() },
+    { id: 'new-folder', title: 'New Folder', category: 'Action', icon: 'solar:add-folder-linear', action: () => openCreateFolderModal() },
     { id: 'new-template', title: 'New Note from Template...', category: 'Action', icon: 'solar:layers-minimalistic-linear', action: () => openTemplateModal() },
     { id: 'quick-capture', title: 'Quick Capture to Inbox (Ctrl+Alt+N)', category: 'Action', icon: 'solar:bolt-linear', action: () => ipcRenderer.send('quick-capture-open') },
     { id: 'save-note', title: 'Save Note', category: 'Action', icon: 'solar:diskette-linear', action: () => saveFile() },

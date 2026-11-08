@@ -65,6 +65,16 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
         check('an image asset is saved byte for byte through the bridge',
             /^assets\/asset_\d+_pic\.png$/.test(assetRel) && Buffer.compare(assetOnDisk, Buffer.from(png)) === 0, assetRel);
 
+        // Media toolbar should be stripped from PDF payload
+        await main.evaluate((rel) => insertMediaElement(rel, 'image'), assetRel);
+        const pdfPayload = await main.evaluate(() => buildPdfDocumentPayload('Test Note'));
+        check('media toolbar and resize buttons are stripped from PDF payload',
+            !pdfPayload.htmlContent.includes('media-toolbar') &&
+            !pdfPayload.htmlContent.includes('25%') &&
+            !pdfPayload.htmlContent.includes('50%') &&
+            !pdfPayload.htmlContent.includes('media-resize-handle'),
+            pdfPayload.htmlContent);
+
         // PDF export: the main process writes the file, and honours an output path inside the notes folder
         const pdfPath = path.join(sandbox.saves, 'export-test.pdf');
         const pdfResult = await main.evaluate((target) => ipcRenderer.invoke('export-pdf', {

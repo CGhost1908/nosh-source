@@ -5165,6 +5165,11 @@ input:checked + .slider:before {
     overflow-y: auto;
     padding-right: 4px;
 }
+.trash-note-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
 
 .trash-item-row {
     display: flex;
@@ -5203,6 +5208,20 @@ input:checked + .slider:before {
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+}
+.trash-note-preview {
+    max-height: 320px;
+    overflow: auto;
+    padding: 12px 14px;
+    color: var(--text-secondary);
+    background: var(--bg-app);
+    border: 1px solid var(--border-subtle);
+}
+.trash-note-preview[hidden] {
+    display: none;
+}
+.trash-note-preview .history-rendered {
+    zoom: 0.85;
 }
 
 .empty-trash-state {
@@ -5920,6 +5939,10 @@ body.zen-mode .zen-exit-pill {
     .code-block-actions,
     .code-window-dots,
     .lang-caret,
+    .media-toolbar,
+    .media-resize-handle,
+    .media-drag-handle,
+    .block-drag-handle,
     .save-pin-quick,
     .save-cloud-icon,
     .resizer,

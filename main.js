@@ -696,6 +696,35 @@ ipcMain.handle('export-pdf', async (event, { defaultName, title, htmlContent, ou
             page-break-inside: avoid;
             break-inside: avoid;
         }
+        .media-container {
+            display: inline-block;
+            max-width: 100%;
+            margin: 8pt 0;
+            position: relative;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .media-container img,
+        .media-container video {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            border-radius: 4pt;
+            display: block;
+            margin: 0;
+        }
+        .media-toolbar,
+        .media-resize-handle,
+        .media-drag-handle,
+        .block-drag-handle {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            height: 0 !important;
+            width: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+        }
         table {
             width: 100%;
             border-collapse: collapse;

@@ -90,6 +90,7 @@ function getCleanContentHTML() {
     clone.querySelectorAll('.CodeMirror').forEach(el => el.remove());
     clone.querySelectorAll('.media-toolbar').forEach(el => el.remove());
     clone.querySelectorAll('.media-resize-handle').forEach(el => el.remove());
+    clone.querySelectorAll('.block-drag-handle, .media-drag-handle').forEach(el => el.remove());
     // Ensure all code textareas have their current value and display cleanly
     const liveTextareas = content.querySelectorAll('textarea.code');
     const cloneTextareas = clone.querySelectorAll('textarea.code');
@@ -324,7 +325,8 @@ function buildPdfDocumentPayload(title) {
     const clone = content.cloneNode(true);
 
     // 1. Remove editor-only & transient UI elements
-    clone.querySelectorAll('.CodeMirror, .code-block-actions, .code-window-dots, .lang-caret, .block-lang-dropdown, .custom-color-popover, .delete-code-button').forEach(el => el.remove());
+    clone.querySelectorAll('.CodeMirror, .code-block-actions, .code-window-dots, .lang-caret, .block-lang-dropdown, .custom-color-popover, .delete-code-button, .media-toolbar, .media-resize-handle, .block-drag-handle, .media-drag-handle').forEach(el => el.remove());
+    clone.querySelectorAll('.media-container.is-resizing').forEach(el => el.classList.remove('is-resizing'));
 
     // 2. Convert all code blocks (.code-block-wrapper) into clean, printable pdf-code-block elements with Light Theme syntax highlighting
     const liveWrappers = content.querySelectorAll('.code-block-wrapper');
@@ -1036,6 +1038,21 @@ function htmlToMarkdown(elementOrHtml) {
 
         if (node.nodeType === Node.ELEMENT_NODE) {
             const tag = node.tagName.toLowerCase();
+
+            // Skip transient editor toolbars, resize handles, and action buttons
+            if (node.classList && (
+                node.classList.contains('media-toolbar') ||
+                node.classList.contains('media-resize-handle') ||
+                node.classList.contains('block-drag-handle') ||
+                node.classList.contains('media-drag-handle') ||
+                node.classList.contains('code-block-actions') ||
+                node.classList.contains('code-window-dots') ||
+                node.classList.contains('block-lang-dropdown') ||
+                node.classList.contains('custom-color-popover') ||
+                node.classList.contains('delete-code-button')
+            )) {
+                return '';
+            }
 
             // Code Block
             if (node.classList.contains('code-block-wrapper')) {
