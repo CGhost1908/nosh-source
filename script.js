@@ -113,7 +113,7 @@ function getCleanContentHTML() {
     // Remove all CodeMirror injected DOM trees and transient media toolbars/handles from the clone
     clone.querySelectorAll('.CodeMirror').forEach(el => el.remove());
     clone.querySelectorAll('.media-toolbar').forEach(el => el.remove());
-    clone.querySelectorAll('.media-resize-handle').forEach(el => el.remove());
+    clone.querySelectorAll('.media-resize-handle, .table-col-resizer').forEach(el => el.remove());
     clone.querySelectorAll('.block-drag-handle, .media-drag-handle').forEach(el => el.remove());
     clone.querySelectorAll('h1[data-placeholder]').forEach(el => el.removeAttribute('data-placeholder'));
     // Ensure all code textareas have their current value and display cleanly
@@ -517,7 +517,7 @@ function buildPdfDocumentPayload(title) {
     const clone = content.cloneNode(true);
 
     // 1. Remove editor-only & transient UI elements
-    clone.querySelectorAll('.CodeMirror, .code-block-actions, .code-window-dots, .lang-caret, .block-lang-dropdown, .custom-color-popover, .delete-code-button, .media-toolbar, .media-resize-handle, .block-drag-handle, .media-drag-handle').forEach(el => el.remove());
+    clone.querySelectorAll('.CodeMirror, .code-block-actions, .code-window-dots, .lang-caret, .block-lang-dropdown, .custom-color-popover, .delete-code-button, .media-toolbar, .media-resize-handle, .block-drag-handle, .media-drag-handle, .table-col-resizer').forEach(el => el.remove());
     clone.querySelectorAll('.media-container.is-resizing').forEach(el => el.classList.remove('is-resizing'));
 
     // 2. Convert all code blocks (.code-block-wrapper) into clean, printable pdf-code-block elements with Light Theme syntax highlighting
@@ -1496,6 +1496,191 @@ function insertChecklist() {
     showToast('Checklist item added', 'info');
 }
 
+function insertTable(rows = 3, cols = 3) {
+    if (!activeNoteName) {
+        showToast('Create or open a note first', 'warning');
+        return;
+    }
+
+    const container = document.createElement('div');
+    container.className = 'table-container';
+
+    let tableHtml = '<table><thead><tr>';
+    for (let c = 1; c <= cols; c++) {
+        tableHtml += `<th>Header ${c}</th>`;
+    }
+    tableHtml += '</tr></thead><tbody>';
+    for (let r = 1; r <= rows; r++) {
+        tableHtml += '<tr>';
+        for (let c = 1; c <= cols; c++) {
+            tableHtml += `<td>Cell ${r},${c}</td>`;
+        }
+        tableHtml += '</tr>';
+    }
+    tableHtml += '</tbody></table>';
+    container.innerHTML = tableHtml;
+
+    const sel = window.getSelection();
+    let block = null;
+    if (sel && sel.rangeCount > 0) {
+        let node = sel.getRangeAt(0).startContainer;
+        while (node && node.parentElement !== content) {
+            node = node.parentElement;
+        }
+        if (node && node.parentElement === content) {
+            block = node;
+        }
+    }
+
+    if (block) {
+        if (block.textContent.trim() === '') {
+            content.replaceChild(container, block);
+        } else {
+            content.insertBefore(container, block.nextSibling);
+        }
+    } else {
+        content.appendChild(container);
+    }
+
+    const nextLine = document.createElement('p');
+    nextLine.innerHTML = '<br>';
+    if (container.nextSibling) {
+        content.insertBefore(nextLine, container.nextSibling);
+    } else {
+        content.appendChild(nextLine);
+    }
+
+    const firstCell = container.querySelector('th, td');
+    if (firstCell) {
+        setTimeout(() => {
+            const range = document.createRange();
+            const s = window.getSelection();
+            range.selectNodeContents(firstCell);
+            s.removeAllRanges();
+            s.addRange(range);
+        }, 50);
+    }
+
+    attachTableColumnResizers(container.querySelector('table'));
+
+    triggerAutoSave();
+    showToast('Table inserted', 'info');
+}
+
+function attachTableColumnResizers(table) {
+    if (!table) return;
+    const firstRow = table.querySelector('thead tr') || table.querySelector('tr');
+    if (!firstRow) return;
+
+    const cells = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+    if (cells.length === 0) return;
+
+    cells.forEach((cell) => {
+        let handle = cell.querySelector('.table-col-resizer');
+        if (!handle) {
+            handle = document.createElement('div');
+            handle.className = 'table-col-resizer';
+            handle.setAttribute('contenteditable', 'false');
+            handle.setAttribute('title', 'Drag to resize column (Double-click to reset)');
+            cell.appendChild(handle);
+        }
+
+        handle.onmousedown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+            const currentIndex = allCols.indexOf(cell);
+            if (currentIndex === -1) return;
+
+            // Measure and lock initial widths for all columns in this table
+            const initialWidths = allCols.map(c => Math.round(c.getBoundingClientRect().width));
+            const initialTableWidth = Math.round(table.getBoundingClientRect().width);
+
+            const contentEl = document.getElementById('content');
+            // Bounded strictly by available editor width so the table never overflows the page
+            const maxPageWidth = contentEl ? Math.floor(contentEl.clientWidth - 24) : 800;
+            const otherColsWidth = initialWidths.reduce((sum, w, idx) => idx === currentIndex ? sum : sum + w, 0);
+            const maxAllowedColWidth = Math.max(15, maxPageWidth - otherColsWidth);
+
+            allCols.forEach((c, idx) => {
+                c.style.width = `${initialWidths[idx]}px`;
+                c.style.minWidth = '0px';
+                c.style.maxWidth = `${maxAllowedColWidth}px`;
+            });
+
+            table.style.tableLayout = 'fixed';
+            table.style.width = `${Math.min(maxPageWidth, initialTableWidth)}px`;
+            table.style.minWidth = '0px';
+            table.style.maxWidth = '100%';
+
+            const startX = e.clientX;
+            const startCellWidth = initialWidths[currentIndex];
+            handle.classList.add('is-active');
+            document.body.classList.add('is-table-resizing');
+
+            const onMouseMove = (moveEvent) => {
+                const diffX = moveEvent.clientX - startX;
+                // Minimum limit removed (safe 10px boundary prevents negative width), maximum limit strictly prevents overflowing the page
+                const newCellWidth = Math.max(10, Math.min(maxAllowedColWidth, startCellWidth + diffX));
+                cell.style.width = `${newCellWidth}px`;
+                cell.style.minWidth = '0px';
+                cell.style.maxWidth = `${maxAllowedColWidth}px`;
+
+                // Total table width strictly hugs column sizes and never exceeds the page
+                const newTableWidth = Math.min(maxPageWidth, otherColsWidth + newCellWidth);
+                table.style.width = `${newTableWidth}px`;
+                table.style.maxWidth = '100%';
+            };
+
+            const onMouseUp = () => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+                handle.classList.remove('is-active');
+                document.body.classList.remove('is-table-resizing');
+
+                hasUnsavedChanges = true;
+                if (typeof unsavedDot !== 'undefined' && unsavedDot) unsavedDot.classList.add('active');
+                if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        };
+
+        handle.ondblclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            cell.style.width = 'auto';
+            cell.style.minWidth = '';
+            cell.style.maxWidth = '';
+            const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+            const hasCustomWidth = allCols.some(c => c.style.width && c.style.width !== 'auto');
+            if (!hasCustomWidth) {
+                table.style.width = 'max-content';
+                table.style.tableLayout = '';
+            }
+            hasUnsavedChanges = true;
+            if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        };
+    });
+}
+
+function processTables(root = document) {
+    const scope = root && root.querySelectorAll ? root : document;
+    const tables = scope.querySelectorAll('#content table, .history-rendered table');
+    tables.forEach(table => attachTableColumnResizers(table));
+}
+
+// Global mouseover listener to ensure dynamically inserted/pasted tables instantly get resizers
+document.addEventListener('mouseover', (e) => {
+    const table = e.target && e.target.closest && e.target.closest('#content table');
+    if (table) {
+        attachTableColumnResizers(table);
+    }
+});
+
 function toggleChecklistItem(checkbox) {
     const item = checkbox.closest('.checklist-item');
     if (!item) return;
@@ -1572,6 +1757,7 @@ function htmlToMarkdown(elementOrHtml) {
             if (node.classList && (
                 node.classList.contains('media-toolbar') ||
                 node.classList.contains('media-resize-handle') ||
+                node.classList.contains('table-col-resizer') ||
                 node.classList.contains('block-drag-handle') ||
                 node.classList.contains('media-drag-handle') ||
                 node.classList.contains('code-block-actions') ||

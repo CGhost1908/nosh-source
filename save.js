@@ -754,6 +754,9 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload
             if (typeof processMathFormulas === 'function') {
                 processMathFormulas();
             }
+            if (typeof processTables === 'function') {
+                processTables();
+            }
             if (typeof updateStatusBarStats === 'function') {
                 updateStatusBarStats();
             }
@@ -1285,6 +1288,9 @@ if (typeof content !== 'undefined' && content) {
         setTimeout(() => {
             if (typeof processMathFormulas === 'function') {
                 processMathFormulas();
+            }
+            if (typeof processTables === 'function') {
+                processTables();
             }
         }, 40);
     });

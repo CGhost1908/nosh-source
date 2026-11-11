@@ -124,7 +124,7 @@ async function deleteNoteHistory(noteName) {
 // and scriptable attributes are stripped, and nothing saved is ever executed.
 function sanitizeSnapshotDoc(html) {
     const doc = new DOMParser().parseFromString(html || '', 'text/html');
-    doc.querySelectorAll('script, style, link, meta, iframe[srcdoc], .CodeMirror, .media-toolbar, .media-resize-handle').forEach(el => el.remove());
+    doc.querySelectorAll('script, style, link, meta, iframe[srcdoc], .CodeMirror, .media-toolbar, .media-resize-handle, .table-col-resizer').forEach(el => el.remove());
 
     doc.querySelectorAll('*').forEach(el => {
         for (const attr of [...el.attributes || []]) {
@@ -201,6 +201,10 @@ function buildHistoryRenderedPreview(container, html, currentHtml = null) {
         if (nextSnapshotOp) nextSnapshotOp.line.source.before(removed);
         else rendered.appendChild(removed);
     });
+
+    const added = rendered.querySelectorAll('.history-change-add').length;
+    const removed = rendered.querySelectorAll('.history-change-remove').length;
+    return { added, removed, ops: diffOps };
 }
 
 function countWords(text) {
@@ -570,8 +574,21 @@ function renderHistoryPreview() {
     if (!preview || historyPanelSnapshotHtml === null) return;
 
     const snapshotLines = snapshotToLines(historyPanelSnapshotHtml);
-    buildHistoryRenderedPreview(preview, historyPanelSnapshotHtml, historyPanelCurrentHtml);
-    if (stats) stats.textContent = `${countWords(snapshotLines.map(l => l.sig).join('\n'))} words in this version`;
+    const diff = buildHistoryRenderedPreview(preview, historyPanelSnapshotHtml, historyPanelCurrentHtml);
+    if (stats) {
+        const words = countWords(snapshotLines.map(l => l.sig).join('\n'));
+        const wordText = `${words} words in this version`;
+        if (historyPanelCurrentHtml !== null && diff) {
+            const { added, removed } = diff;
+            if (added === 0 && removed === 0) {
+                stats.innerHTML = `<span class="history-stat-words">${wordText}</span> <span class="history-stat-sep">·</span> <span class="history-stat-same">identical to current note</span>`;
+            } else {
+                stats.innerHTML = `<span class="history-stat-words">${wordText}</span> <span class="history-stat-sep">·</span> <span class="history-stat-diff"><span class="history-stat-add">+${added} added</span>, <span class="history-stat-del">−${removed} removed</span></span>`;
+            }
+        } else {
+            stats.textContent = wordText;
+        }
+    }
 }
 
 async function renderHistoryList() {
@@ -636,9 +653,16 @@ async function selectHistoryEntry(id) {
         // Render the selected snapshot as it was written.
         historyPanelSnapshotHtml = html;
         historyPanelCurrentHtml = null;
-        try {
-            historyPanelCurrentHtml = await fsPromises.readFile(path.join(savesDir, `${path.basename(historyPanelNote)}.nsh`), 'utf8');
-        } catch (err) { /* note may not exist on disk yet */ }
+        if (activeNoteName === historyPanelNote && hasUnsavedChanges && typeof getCleanContentHTML === 'function') {
+            try {
+                historyPanelCurrentHtml = getCleanContentHTML();
+            } catch (err) { /* fallback to file on disk */ }
+        }
+        if (!historyPanelCurrentHtml) {
+            try {
+                historyPanelCurrentHtml = await fsPromises.readFile(path.join(savesDir, `${path.basename(historyPanelNote)}.nsh`), 'utf8');
+            } catch (err) { /* note may not exist on disk yet */ }
+        }
         if (historyPanelSelectedId !== id) return;
         renderHistoryPreview();
     } catch (err) {

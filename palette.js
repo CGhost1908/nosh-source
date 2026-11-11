@@ -21,6 +21,7 @@ const commandPaletteActions = [
             insertCodeBlockFromSelection();
         }
     } },
+    { id: 'insert-table', title: 'Insert Table (3x3)', category: 'Insert', icon: 'solar:widget-2-linear', action: () => insertTable() },
     { id: 'insert-checklist', title: 'Insert Checklist / Task List', category: 'Insert', icon: 'solar:checklist-minimalistic-linear', action: () => insertChecklist() },
     { id: 'insert-link', title: 'Insert Link / Note Reference', category: 'Insert', icon: 'solar:link-linear', action: () => openLinkModal() },
     { id: 'insert-wiki-link', title: 'Link to Note ([[Note Title]])', category: 'Insert', icon: 'solar:document-add-linear', action: () => openInternalLinkModal() },

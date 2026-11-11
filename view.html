@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="view.css?v=2.6">
+    <link rel="stylesheet" href="view.css?v=2.7">
     
     <style>
         /* Fail-safe inline styles to prevent browser cache mismatch */
@@ -179,6 +179,122 @@
         .reader-container {
             padding-bottom: 65vh !important;
         }
+        /* Compact, Modern Note Tables */
+        .doc-body .table-container {
+            width: max-content;
+            max-width: 100%;
+            overflow-x: auto;
+            margin: 14px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            box-sizing: border-box;
+            scrollbar-width: thin;
+        }
+        .doc-body table {
+            width: max-content;
+            max-width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 14px 0;
+            font-size: 12.5px;
+            line-height: 1.45;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            overflow: hidden;
+            font-variant-numeric: tabular-nums;
+            box-sizing: border-box;
+        }
+        .doc-body .table-container table {
+            margin: 0;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            width: max-content;
+            max-width: 100%;
+        }
+        .doc-body th, .doc-body td {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 6px 12px;
+            text-align: left;
+            vertical-align: middle;
+            color: #c9d1d9;
+            max-width: 850px;
+            word-break: break-word;
+            position: relative;
+        }
+        .doc-body th {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+            font-size: 11.5px;
+            letter-spacing: 0.02em;
+            color: #f1f5f9;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+            padding: 7px 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            user-select: text;
+        }
+        .doc-body th:last-child, .doc-body td:last-child {
+            border-right: none;
+        }
+        .doc-body tr:last-child td {
+            border-bottom: none;
+        }
+        .doc-body tr:nth-child(even) td {
+            background: rgba(255, 255, 255, 0.015);
+        }
+        .doc-body tbody tr:hover td {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .doc-body td code {
+            font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 11.5px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .doc-body td p, .doc-body th p {
+            margin: 0;
+        }
+        /* Table Column Resizer */
+        .table-col-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 6px;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 10;
+        }
+        .table-col-resizer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            width: 2px;
+            background: transparent;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .table-col-resizer:hover::after,
+        .table-col-resizer.is-active::after {
+            background: #6366f1;
+            box-shadow: 0 0 6px rgba(99, 102, 241, 0.4);
+        }
+        body.is-table-resizing {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+        body.is-table-resizing * {
+            user-select: none !important;
+            cursor: col-resize !important;
+        }
         @media (max-width: 860px) {
             .nav-links {
                 display: none;
@@ -332,10 +448,14 @@
         }
 
         function renderNoteBody(container, rawHtml) {
-            const safeHtml = sanitizeNoteHTML(rawHtml);
+            let contentToRender = rawHtml || '';
+            if (typeof isRawMarkdownDocument === 'function' && isRawMarkdownDocument(contentToRender)) {
+                contentToRender = convertRawMarkdownToHtml(contentToRender);
+            }
+            const safeHtml = sanitizeNoteHTML(contentToRender);
             if (safeHtml === null) {
                 console.error('DOMPurify unavailable; rendering note as plain text.');
-                container.textContent = rawHtml || '';
+                container.textContent = contentToRender || '';
                 return;
             }
             container.innerHTML = safeHtml;
@@ -487,8 +607,407 @@
             }
         }
 
+        // --- Table & Markdown Processing for Published Notes ---
+        function splitMarkdownTableRow(rowLine) {
+            let s = (rowLine || '').trim();
+            if (s.startsWith('|')) s = s.slice(1);
+            if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1);
+            const cells = [];
+            let cur = '';
+            for (let i = 0; i < s.length; i++) {
+                if (s[i] === '\\' && i + 1 < s.length && s[i + 1] === '|') {
+                    cur += '|';
+                    i++;
+                } else if (s[i] === '|') {
+                    cells.push(cur.trim());
+                    cur = '';
+                } else {
+                    cur += s[i];
+                }
+            }
+            cells.push(cur.trim());
+            return cells;
+        }
+
+        function isMarkdownTableSeparator(line) {
+            const trimmed = (line || '').trim();
+            if (!trimmed.startsWith('|') || !trimmed.includes('-')) return false;
+            const cells = splitMarkdownTableRow(trimmed);
+            return cells.length > 0 && cells.every(c => /^:?-{2,}:?$/.test(c.trim()));
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function parseSimpleInlineFormatting(text) {
+            if (!text) return '';
+            let t = escapeHtml(text);
+            t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+            t = t.replace(/\*\*\*([^\n*]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            t = t.replace(/\*\*([^\n*]+?)\*\*/g, '<strong>$1</strong>');
+            t = t.replace(/__([^\n_]+?)__/g, '<strong>$1</strong>');
+            t = t.replace(/\*([^\s*](?:[^\n*]*?[^\s*])?)\*/g, '<em>$1</em>');
+            t = t.replace(/(^|[\s(])_([^\s_](?:[^\n_]*?[^\s_])?)_(?=$|[\s.,;:!?)])/g, '$1<em>$2</em>');
+            t = t.replace(/~~([^\n~]+?)~~/g, '<s>$1</s>');
+            return t;
+        }
+
+        function markdownRowsToTableElement(rows) {
+            if (!rows || rows.length < 2) return null;
+            const headerCells = splitMarkdownTableRow(rows[0]);
+            const sepCells = splitMarkdownTableRow(rows[1]);
+            if (!sepCells.every(c => /^:?-{2,}:?$/.test(c.trim()))) return null;
+
+            const aligns = sepCells.map(c => {
+                const s = c.trim();
+                if (s.startsWith(':') && s.endsWith(':')) return 'center';
+                if (s.endsWith(':')) return 'right';
+                return 'left';
+            });
+
+            const bodyLines = rows.slice(2);
+            const container = document.createElement('div');
+            container.className = 'table-container';
+
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const trHead = document.createElement('tr');
+
+            headerCells.forEach((h, idx) => {
+                const th = document.createElement('th');
+                if (aligns[idx] && aligns[idx] !== 'left') th.style.textAlign = aligns[idx];
+                th.innerHTML = parseSimpleInlineFormatting(h);
+                trHead.appendChild(th);
+            });
+            thead.appendChild(trHead);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            bodyLines.forEach(bLine => {
+                const trimmed = bLine.trim();
+                if (!trimmed.startsWith('|')) return;
+                if (isMarkdownTableSeparator(trimmed)) return;
+                const bCells = splitMarkdownTableRow(trimmed);
+                const tr = document.createElement('tr');
+                headerCells.forEach((_, idx) => {
+                    const td = document.createElement('td');
+                    if (aligns[idx] && aligns[idx] !== 'left') td.style.textAlign = aligns[idx];
+                    td.innerHTML = parseSimpleInlineFormatting(bCells[idx] ?? '');
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            container.appendChild(table);
+            return container;
+        }
+
+        function convertMarkdownTablesInDOM(container) {
+            if (!container) return;
+
+            // 1. Multiline markdown tables inside single elements (e.g. <p>...<br>...</p> or <div>)
+            const candidateElements = Array.from(container.querySelectorAll('p, div, blockquote'));
+            candidateElements.forEach(el => {
+                if (!el.isConnected) return;
+                const htmlWithNewlines = el.innerHTML.replace(/<br\s*\/?>/gi, '\n');
+                if (!htmlWithNewlines.includes('|') || !htmlWithNewlines.includes('-')) return;
+
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = htmlWithNewlines;
+                const lines = tempDiv.textContent.replace(/\r\n?/g, '\n').split('\n').map(l => l.trim()).filter(Boolean);
+
+                for (let i = 0; i < lines.length - 1; i++) {
+                    if (lines[i].startsWith('|') && isMarkdownTableSeparator(lines[i + 1])) {
+                        const tableRows = [lines[i], lines[i + 1]];
+                        let j = i + 2;
+                        while (j < lines.length && lines[j].startsWith('|')) {
+                            if (!isMarkdownTableSeparator(lines[j])) {
+                                tableRows.push(lines[j]);
+                            }
+                            j++;
+                        }
+                        const tableEl = markdownRowsToTableElement(tableRows);
+                        if (tableEl) {
+                            if (tableRows.length === lines.length) {
+                                el.replaceWith(tableEl);
+                            } else {
+                                const beforeLines = lines.slice(0, i);
+                                const afterLines = lines.slice(j);
+                                const frag = document.createDocumentFragment();
+                                if (beforeLines.length > 0) {
+                                    const pBefore = document.createElement('p');
+                                    pBefore.innerHTML = beforeLines.map(l => parseSimpleInlineFormatting(l)).join('<br>');
+                                    frag.appendChild(pBefore);
+                                }
+                                frag.appendChild(tableEl);
+                                if (afterLines.length > 0) {
+                                    const pAfter = document.createElement('p');
+                                    pAfter.innerHTML = afterLines.map(l => parseSimpleInlineFormatting(l)).join('<br>');
+                                    frag.appendChild(pAfter);
+                                }
+                                el.replaceWith(frag);
+                            }
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // 2. Sibling elements where each row is in a separate <p> or <div>
+            const children = Array.from(container.children);
+            let idx = 0;
+            while (idx < children.length - 1) {
+                const cur = children[idx];
+                const next = children[idx + 1];
+                if (!cur || !next || !cur.isConnected || !next.isConnected) {
+                    idx++;
+                    continue;
+                }
+                const t0 = (cur.textContent || '').trim();
+                const t1 = (next.textContent || '').trim();
+
+                if (t0.startsWith('|') && isMarkdownTableSeparator(t1)) {
+                    const tableRows = [t0, t1];
+                    const elementsToRemove = [cur, next];
+                    let scanIdx = idx + 2;
+                    while (scanIdx < children.length) {
+                        const sib = children[scanIdx];
+                        const sibText = (sib.textContent || '').trim();
+                        if (sibText.startsWith('|')) {
+                            if (!isMarkdownTableSeparator(sibText)) {
+                                tableRows.push(sibText);
+                            }
+                            elementsToRemove.push(sib);
+                            scanIdx++;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    const tableEl = markdownRowsToTableElement(tableRows);
+                    if (tableEl) {
+                        cur.parentNode.insertBefore(tableEl, cur);
+                        elementsToRemove.forEach(el => el.remove());
+                        idx = scanIdx;
+                        continue;
+                    }
+                }
+                idx++;
+            }
+        }
+
+        function wrapBareTablesInDOM(container) {
+            if (!container) return;
+            const tables = container.querySelectorAll('table');
+            tables.forEach(table => {
+                const parent = table.parentElement;
+                if (!parent || !parent.classList.contains('table-container')) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'table-container';
+                    table.parentNode.insertBefore(wrapper, table);
+                    wrapper.appendChild(table);
+                }
+            });
+        }
+
+        function attachTableColumnResizers(table) {
+            if (!table) return;
+            const firstRow = table.querySelector('thead tr') || table.querySelector('tr');
+            if (!firstRow) return;
+
+            const cells = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+            if (cells.length === 0) return;
+
+            cells.forEach((cell) => {
+                let handle = cell.querySelector('.table-col-resizer');
+                if (!handle) {
+                    handle = document.createElement('div');
+                    handle.className = 'table-col-resizer';
+                    handle.setAttribute('contenteditable', 'false');
+                    handle.setAttribute('title', 'Drag to resize column (Double-click to reset)');
+                    cell.appendChild(handle);
+                }
+
+                handle.onmousedown = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+                    const currentIndex = allCols.indexOf(cell);
+                    if (currentIndex === -1) return;
+
+                    const initialWidths = allCols.map(c => Math.round(c.getBoundingClientRect().width));
+                    const initialTableWidth = Math.round(table.getBoundingClientRect().width);
+
+                    const readerEl = document.querySelector('.reader-container') || document.body;
+                    const maxPageWidth = readerEl ? Math.floor(readerEl.clientWidth - 32) : 800;
+                    const otherColsWidth = initialWidths.reduce((sum, w, idx) => idx === currentIndex ? sum : sum + w, 0);
+                    const maxAllowedColWidth = Math.max(15, maxPageWidth - otherColsWidth);
+
+                    allCols.forEach((c, idx) => {
+                        c.style.width = `${initialWidths[idx]}px`;
+                        c.style.minWidth = '0px';
+                        c.style.maxWidth = `${maxAllowedColWidth}px`;
+                    });
+
+                    table.style.tableLayout = 'fixed';
+                    table.style.width = `${Math.min(maxPageWidth, initialTableWidth)}px`;
+                    table.style.minWidth = '0px';
+                    table.style.maxWidth = '100%';
+
+                    const startX = e.clientX;
+                    const startCellWidth = initialWidths[currentIndex];
+                    handle.classList.add('is-active');
+                    document.body.classList.add('is-table-resizing');
+
+                    const onMouseMove = (moveEvent) => {
+                        const diffX = moveEvent.clientX - startX;
+                        const newCellWidth = Math.max(10, Math.min(maxAllowedColWidth, startCellWidth + diffX));
+                        cell.style.width = `${newCellWidth}px`;
+                        cell.style.minWidth = '0px';
+                        cell.style.maxWidth = `${maxAllowedColWidth}px`;
+
+                        const newTableWidth = Math.min(maxPageWidth, otherColsWidth + newCellWidth);
+                        table.style.width = `${newTableWidth}px`;
+                        table.style.maxWidth = '100%';
+                    };
+
+                    const onMouseUp = () => {
+                        window.removeEventListener('mousemove', onMouseMove);
+                        window.removeEventListener('mouseup', onMouseUp);
+                        handle.classList.remove('is-active');
+                        document.body.classList.remove('is-table-resizing');
+                    };
+
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
+                };
+
+                handle.ondblclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cell.style.width = 'auto';
+                    cell.style.minWidth = '';
+                    cell.style.maxWidth = '';
+                    const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+                    const hasCustomWidth = allCols.some(c => c.style.width && c.style.width !== 'auto');
+                    if (!hasCustomWidth) {
+                        table.style.width = 'max-content';
+                        table.style.tableLayout = '';
+                    }
+                };
+            });
+        }
+
+        function initTableResizersInDOM(container) {
+            if (!container) return;
+            const tables = container.querySelectorAll('table');
+            tables.forEach(table => attachTableColumnResizers(table));
+        }
+
+        function isRawMarkdownDocument(text) {
+            if (!text || typeof text !== 'string') return false;
+            if (/<(p|div|h[1-6]|table|blockquote|ul|ol|pre|section|article)\b/i.test(text)) {
+                return false;
+            }
+            const s = text.trim();
+            if (!s) return false;
+            if (/^#{1,6}\s+\S/m.test(s)) return true;
+            if (/^(`{3,}|~{3,})\w*/m.test(s)) return true;
+            if (/^\|.+\|\s*\n\s*\|[\s:|-]+\|/m.test(s)) return true;
+            return false;
+        }
+
+        function convertRawMarkdownToHtml(mdText) {
+            if (!mdText) return '';
+            const lines = String(mdText).replace(/\r\n?/g, '\n').split('\n');
+            const htmlParts = [];
+            let i = 0;
+
+            while (i < lines.length) {
+                const line = lines[i];
+                const trimmed = line.trim();
+
+                if (!trimmed) {
+                    i++;
+                    continue;
+                }
+
+                // ATX Headings
+                const headingMatch = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+                if (headingMatch) {
+                    const level = Math.min(headingMatch[1].length, 6);
+                    htmlParts.push(`<h${level}>${parseSimpleInlineFormatting(headingMatch[2])}</h${level}>`);
+                    i++;
+                    continue;
+                }
+
+                // Table
+                if (trimmed.startsWith('|') && i + 1 < lines.length && isMarkdownTableSeparator(lines[i + 1])) {
+                    const tableRows = [trimmed, lines[i + 1].trim()];
+                    i += 2;
+                    while (i < lines.length && lines[i].trim().startsWith('|')) {
+                        if (!isMarkdownTableSeparator(lines[i])) {
+                            tableRows.push(lines[i].trim());
+                        }
+                        i++;
+                    }
+                    const tableEl = markdownRowsToTableElement(tableRows);
+                    if (tableEl) {
+                        htmlParts.push(tableEl.outerHTML);
+                    }
+                    continue;
+                }
+
+                // Code block
+                if (trimmed.startsWith('```')) {
+                    const lang = trimmed.slice(3).trim();
+                    const codeLines = [];
+                    i++;
+                    while (i < lines.length && !lines[i].trim().startsWith('```')) {
+                        codeLines.push(lines[i]);
+                        i++;
+                    }
+                    i++;
+                    htmlParts.push(`
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header">
+                                <div class="code-header-left"><span class="code-lang-tag">${escapeHtml(lang || 'code')}</span></div>
+                                <div class="code-block-actions">
+                                    <button class="code-action-btn wrap-btn">Wrap</button>
+                                    <button class="code-action-btn copy-btn">Copy</button>
+                                </div>
+                            </div>
+                            <textarea class="code" language="${escapeHtml(lang || 'javascript')}">${escapeHtml(codeLines.join('\n'))}</textarea>
+                        </div>
+                    `.trim());
+                    continue;
+                }
+
+                // Regular paragraph
+                const pLines = [trimmed];
+                i++;
+                while (i < lines.length && lines[i].trim() && !lines[i].trim().startsWith('#') && !lines[i].trim().startsWith('|') && !lines[i].trim().startsWith('```')) {
+                    pLines.push(lines[i].trim());
+                    i++;
+                }
+                htmlParts.push(`<p>${pLines.map(l => parseSimpleInlineFormatting(l)).join('<br>')}</p>`);
+            }
+
+            return htmlParts.join('\n');
+        }
+
         function initInteractiveElements(container) {
             upgradeLegacyBlocksInDOM(container);
+            convertMarkdownTablesInDOM(container);
+            wrapBareTablesInDOM(container);
+            initTableResizersInDOM(container);
 
             const codeBlocks = container.querySelectorAll('.code-block-wrapper');
             codeBlocks.forEach(wrapper => {
@@ -577,6 +1096,13 @@
                 });
             }
         }
+
+        document.addEventListener('mouseover', (e) => {
+            const table = e.target && e.target.closest && e.target.closest('.doc-body table');
+            if (table) {
+                attachTableColumnResizers(table);
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', fetchPublishedNote);
     </script>

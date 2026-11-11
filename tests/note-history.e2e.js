@@ -146,6 +146,19 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
         check('preview keeps the saved note layout and highlights additions and removals',
             preview.rendered && preview.heading && preview.checkbox && preview.checked && preview.code && !preview.hasDiff && preview.added > 0 && preview.removed > 0 && preview.addPrefix === '"+"' && preview.removePrefix === '"−"' && preview.radius === '0px' && preview.shadow === 'none' && preview.zoom === '0.85', preview);
 
+        const statsCheck = await main.evaluate(() => {
+            const stats = document.getElementById('history-preview-stats');
+            return {
+                text: stats?.textContent || '',
+                hasAdd: !!stats?.querySelector('.history-stat-add'),
+                hasDel: !!stats?.querySelector('.history-stat-del'),
+                addText: stats?.querySelector('.history-stat-add')?.textContent,
+                delText: stats?.querySelector('.history-stat-del')?.textContent
+            };
+        });
+        check('snapshot preview stats show word count and added/removed line counts',
+            statsCheck.hasAdd && statsCheck.hasDel && statsCheck.addText.startsWith('+') && statsCheck.delText.startsWith('−'), statsCheck);
+
         // Restore through the UI
         const beforeRestore = snaps().length;
         await main.click('#history-restore-btn');
