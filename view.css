@@ -331,10 +331,10 @@ body {
     max-width: 100%;
     overflow-x: auto;
     margin: 14px 0;
-    border-radius: 8px;
+    border-radius: 0;
     border: 1px solid var(--border-subtle);
-    background: rgba(255, 255, 255, 0.02);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    background: transparent;
+    box-shadow: none;
     box-sizing: border-box;
     scrollbar-width: thin;
 }
@@ -346,9 +346,11 @@ body {
     margin: 14px 0;
     font-size: 12.5px;
     line-height: 1.45;
+    background: transparent;
     border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
+    box-shadow: none;
     font-variant-numeric: tabular-nums;
     box-sizing: border-box;
 }
@@ -389,10 +391,10 @@ body {
     border-bottom: none;
 }
 .doc-body tr:nth-child(even) td {
-    background: rgba(255, 255, 255, 0.015);
+    background: transparent;
 }
 .doc-body tbody tr:hover td {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.02);
 }
 .doc-body td code {
     font-family: var(--font-code, monospace);

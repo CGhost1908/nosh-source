@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="view.css?v=2.7">
+    <link rel="stylesheet" href="view.css?v=2.9">
     
     <style>
         /* Fail-safe inline styles to prevent browser cache mismatch */
@@ -180,17 +180,17 @@
             padding-bottom: 65vh !important;
             max-width: 900px !important;
         }
-        /* Compact, Modern Note Tables */
+        /* Compact, Modern Zen Note Tables */
         .doc-body .table-container {
             width: max-content;
             max-width: 100%;
             overflow-x: auto;
             overflow-y: hidden;
             margin: 14px 0;
-            border-radius: 8px;
+            border-radius: 0;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.02);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            background: transparent;
+            box-shadow: none;
             box-sizing: border-box;
             scrollbar-width: thin;
             scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
@@ -216,9 +216,11 @@
             margin: 14px 0;
             font-size: 12.5px;
             line-height: 1.45;
+            background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
+            border-radius: 0;
             overflow: hidden;
+            box-shadow: none;
             font-variant-numeric: tabular-nums;
             box-sizing: border-box;
         }
@@ -261,10 +263,10 @@
             border-bottom: none;
         }
         .doc-body tr:nth-child(even) td {
-            background: rgba(255, 255, 255, 0.015);
+            background: transparent;
         }
         .doc-body tbody tr:hover td {
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.02);
         }
         .doc-body td code {
             font-family: 'JetBrains Mono', Consolas, monospace;

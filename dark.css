@@ -2911,7 +2911,7 @@ body.is-dragging-note .sidebar-folder-header * {
     border: 1px solid var(--border-subtle);
     color: var(--text-primary);
 }
-/* Compact, Modern Note Tables */
+/* Compact, Modern Zen Note Tables */
 #content table, .history-rendered table {
     width: max-content;
     max-width: 100%;
@@ -2920,11 +2920,11 @@ body.is-dragging-note .sidebar-folder-header * {
     margin: 14px 0;
     font-size: 12.5px;
     line-height: 1.45;
-    background: var(--bg-card);
+    background: transparent;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md, 8px);
+    border-radius: 0;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    box-shadow: none;
     font-variant-numeric: tabular-nums;
 }
 #content th, #content td,
@@ -2972,11 +2972,11 @@ body.is-dragging-note .sidebar-folder-header * {
 }
 #content tr:nth-child(even) td,
 .history-rendered tr:nth-child(even) td {
-    background: rgba(255, 255, 255, 0.015);
+    background: transparent;
 }
 body[data-theme="light"] #content tr:nth-child(even) td,
 body[data-theme="light"] .history-rendered tr:nth-child(even) td {
-    background: rgba(15, 23, 42, 0.02);
+    background: transparent;
 }
 #content tbody tr:hover td,
 .history-rendered tbody tr:hover td {
@@ -7574,10 +7574,10 @@ body.zen-mode .zen-exit-pill {
     max-width: 100%;
     overflow-x: auto;
     margin: 14px 0;
-    border-radius: var(--radius-md, 8px);
+    border-radius: 0;
     border: 1px solid var(--border-subtle);
-    background: var(--bg-card);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    background: transparent;
+    box-shadow: none;
     box-sizing: border-box;
     scrollbar-width: thin;
 }
