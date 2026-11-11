@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="view.css?v=2.9">
+    <link rel="stylesheet" href="view.css?v=3.0">
     
     <style>
         /* Fail-safe inline styles to prevent browser cache mismatch */
@@ -176,9 +176,19 @@
         .code-lang-tag .lang-caret {
             display: none !important;
         }
+        html, body {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
         .reader-container {
             padding-bottom: 65vh !important;
             max-width: 900px !important;
+            box-sizing: border-box !important;
+        }
+        @media (max-width: 768px) {
+            .reader-container {
+                padding: 16px 14px 65vh 14px !important;
+            }
         }
         /* Compact, Modern Zen Note Tables */
         .doc-body .table-container {
@@ -194,6 +204,7 @@
             box-sizing: border-box;
             scrollbar-width: thin;
             scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+            -webkit-overflow-scrolling: touch;
         }
         .doc-body .table-container::-webkit-scrollbar {
             height: 6px;
@@ -219,10 +230,11 @@
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 0;
-            overflow: hidden;
-            box-shadow: none;
             font-variant-numeric: tabular-nums;
             box-sizing: border-box;
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .doc-body .table-container table {
             margin: 0;
@@ -231,6 +243,8 @@
             box-shadow: none;
             width: max-content;
             max-width: 100%;
+            display: table;
+            overflow: visible;
         }
         .doc-body th, .doc-body td {
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -878,9 +892,24 @@
             return htmlParts.join('\n');
         }
 
+        function wrapBareTablesInDOM(container) {
+            if (!container) return;
+            const tables = container.querySelectorAll('table');
+            tables.forEach(table => {
+                const parent = table.parentElement;
+                if (!parent || !parent.classList.contains('table-container')) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'table-container';
+                    table.parentNode.insertBefore(wrapper, table);
+                    wrapper.appendChild(table);
+                }
+            });
+        }
+
         function initInteractiveElements(container) {
             upgradeLegacyBlocksInDOM(container);
             convertMarkdownTablesInDOM(container);
+            wrapBareTablesInDOM(container);
             container.querySelectorAll('.table-col-resizer').forEach(el => el.remove());
 
             const codeBlocks = container.querySelectorAll('.code-block-wrapper');
