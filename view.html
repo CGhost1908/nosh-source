@@ -178,12 +178,14 @@
         }
         .reader-container {
             padding-bottom: 65vh !important;
+            max-width: 900px !important;
         }
         /* Compact, Modern Note Tables */
         .doc-body .table-container {
             width: max-content;
             max-width: 100%;
             overflow-x: auto;
+            overflow-y: hidden;
             margin: 14px 0;
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -191,6 +193,20 @@
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
             box-sizing: border-box;
             scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+        }
+        .doc-body .table-container::-webkit-scrollbar {
+            height: 6px;
+        }
+        .doc-body .table-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .doc-body .table-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+        }
+        .doc-body .table-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
         }
         .doc-body table {
             width: max-content;
@@ -260,40 +276,6 @@
         }
         .doc-body td p, .doc-body th p {
             margin: 0;
-        }
-        /* Table Column Resizer */
-        .table-col-resizer {
-            position: absolute;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            width: 6px;
-            cursor: col-resize;
-            user-select: none;
-            z-index: 10;
-        }
-        .table-col-resizer::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            right: 0;
-            width: 2px;
-            background: transparent;
-            transition: background-color 0.15s ease, box-shadow 0.15s ease;
-        }
-        .table-col-resizer:hover::after,
-        .table-col-resizer.is-active::after {
-            background: #6366f1;
-            box-shadow: 0 0 6px rgba(99, 102, 241, 0.4);
-        }
-        body.is-table-resizing {
-            cursor: col-resize !important;
-            user-select: none !important;
-        }
-        body.is-table-resizing * {
-            user-select: none !important;
-            cursor: col-resize !important;
         }
         @media (max-width: 860px) {
             .nav-links {
@@ -802,115 +784,6 @@
             }
         }
 
-        function wrapBareTablesInDOM(container) {
-            if (!container) return;
-            const tables = container.querySelectorAll('table');
-            tables.forEach(table => {
-                const parent = table.parentElement;
-                if (!parent || !parent.classList.contains('table-container')) {
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'table-container';
-                    table.parentNode.insertBefore(wrapper, table);
-                    wrapper.appendChild(table);
-                }
-            });
-        }
-
-        function attachTableColumnResizers(table) {
-            if (!table) return;
-            const firstRow = table.querySelector('thead tr') || table.querySelector('tr');
-            if (!firstRow) return;
-
-            const cells = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
-            if (cells.length === 0) return;
-
-            cells.forEach((cell) => {
-                let handle = cell.querySelector('.table-col-resizer');
-                if (!handle) {
-                    handle = document.createElement('div');
-                    handle.className = 'table-col-resizer';
-                    handle.setAttribute('contenteditable', 'false');
-                    handle.setAttribute('title', 'Drag to resize column (Double-click to reset)');
-                    cell.appendChild(handle);
-                }
-
-                handle.onmousedown = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
-                    const currentIndex = allCols.indexOf(cell);
-                    if (currentIndex === -1) return;
-
-                    const initialWidths = allCols.map(c => Math.round(c.getBoundingClientRect().width));
-                    const initialTableWidth = Math.round(table.getBoundingClientRect().width);
-
-                    const readerEl = document.querySelector('.reader-container') || document.body;
-                    const maxPageWidth = readerEl ? Math.floor(readerEl.clientWidth - 32) : 800;
-                    const otherColsWidth = initialWidths.reduce((sum, w, idx) => idx === currentIndex ? sum : sum + w, 0);
-                    const maxAllowedColWidth = Math.max(15, maxPageWidth - otherColsWidth);
-
-                    allCols.forEach((c, idx) => {
-                        c.style.width = `${initialWidths[idx]}px`;
-                        c.style.minWidth = '0px';
-                        c.style.maxWidth = `${maxAllowedColWidth}px`;
-                    });
-
-                    table.style.tableLayout = 'fixed';
-                    table.style.width = `${Math.min(maxPageWidth, initialTableWidth)}px`;
-                    table.style.minWidth = '0px';
-                    table.style.maxWidth = '100%';
-
-                    const startX = e.clientX;
-                    const startCellWidth = initialWidths[currentIndex];
-                    handle.classList.add('is-active');
-                    document.body.classList.add('is-table-resizing');
-
-                    const onMouseMove = (moveEvent) => {
-                        const diffX = moveEvent.clientX - startX;
-                        const newCellWidth = Math.max(10, Math.min(maxAllowedColWidth, startCellWidth + diffX));
-                        cell.style.width = `${newCellWidth}px`;
-                        cell.style.minWidth = '0px';
-                        cell.style.maxWidth = `${maxAllowedColWidth}px`;
-
-                        const newTableWidth = Math.min(maxPageWidth, otherColsWidth + newCellWidth);
-                        table.style.width = `${newTableWidth}px`;
-                        table.style.maxWidth = '100%';
-                    };
-
-                    const onMouseUp = () => {
-                        window.removeEventListener('mousemove', onMouseMove);
-                        window.removeEventListener('mouseup', onMouseUp);
-                        handle.classList.remove('is-active');
-                        document.body.classList.remove('is-table-resizing');
-                    };
-
-                    window.addEventListener('mousemove', onMouseMove);
-                    window.addEventListener('mouseup', onMouseUp);
-                };
-
-                handle.ondblclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    cell.style.width = 'auto';
-                    cell.style.minWidth = '';
-                    cell.style.maxWidth = '';
-                    const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
-                    const hasCustomWidth = allCols.some(c => c.style.width && c.style.width !== 'auto');
-                    if (!hasCustomWidth) {
-                        table.style.width = 'max-content';
-                        table.style.tableLayout = '';
-                    }
-                };
-            });
-        }
-
-        function initTableResizersInDOM(container) {
-            if (!container) return;
-            const tables = container.querySelectorAll('table');
-            tables.forEach(table => attachTableColumnResizers(table));
-        }
-
         function isRawMarkdownDocument(text) {
             if (!text || typeof text !== 'string') return false;
             if (/<(p|div|h[1-6]|table|blockquote|ul|ol|pre|section|article)\b/i.test(text)) {
@@ -1006,8 +879,7 @@
         function initInteractiveElements(container) {
             upgradeLegacyBlocksInDOM(container);
             convertMarkdownTablesInDOM(container);
-            wrapBareTablesInDOM(container);
-            initTableResizersInDOM(container);
+            container.querySelectorAll('.table-col-resizer').forEach(el => el.remove());
 
             const codeBlocks = container.querySelectorAll('.code-block-wrapper');
             codeBlocks.forEach(wrapper => {
@@ -1096,13 +968,6 @@
                 });
             }
         }
-
-        document.addEventListener('mouseover', (e) => {
-            const table = e.target && e.target.closest && e.target.closest('.doc-body table');
-            if (table) {
-                attachTableColumnResizers(table);
-            }
-        });
 
         window.addEventListener('DOMContentLoaded', fetchPublishedNote);
     </script>

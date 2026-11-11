@@ -228,7 +228,7 @@ body {
 /* --- Document Reader Container (Flat, Seamless) --- */
 .reader-container {
     width: 100%;
-    max-width: 780px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 24px 20px 65vh 20px;
 }
@@ -405,39 +405,18 @@ body {
 .doc-body td p, .doc-body th p {
     margin: 0;
 }
-/* Table Column Resizer */
-.table-col-resizer {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 6px;
-    cursor: col-resize;
-    user-select: none;
-    z-index: 10;
+.doc-body .table-container::-webkit-scrollbar {
+    height: 6px;
 }
-.table-col-resizer::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 0;
-    width: 2px;
+.doc-body .table-container::-webkit-scrollbar-track {
     background: transparent;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
-.table-col-resizer:hover::after,
-.table-col-resizer.is-active::after {
-    background: var(--accent, #6366f1);
-    box-shadow: 0 0 6px var(--accent-glow, rgba(99, 102, 241, 0.4));
+.doc-body .table-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
 }
-body.is-table-resizing {
-    cursor: col-resize !important;
-    user-select: none !important;
-}
-body.is-table-resizing * {
-    user-select: none !important;
-    cursor: col-resize !important;
+.doc-body .table-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
 }
 .doc-body .claude-embedded-diagram {
     margin: 16px 0;
