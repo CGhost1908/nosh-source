@@ -111,7 +111,14 @@ async function resolvePublishedMediaInHTML(rawHtml, onProgressStatus) {
     tempDiv.innerHTML = rawHtml;
 
     // Strip any editor-only chrome just in case rawHtml came straight from disk
-    tempDiv.querySelectorAll('.CodeMirror, .media-toolbar, .media-resize-handle').forEach(el => el.remove());
+    tempDiv.querySelectorAll(
+        '.CodeMirror, .code-block-wrapper .block-drag-handle, .code-block-wrapper .move-up-btn, .code-block-wrapper .move-down-btn, .code-block-wrapper .wrap-btn, .code-block-wrapper .code-action-btn.delete, .code-block-wrapper .lang-caret, .media-toolbar, .media-resize-handle'
+    ).forEach(el => el.remove());
+    tempDiv.querySelectorAll('.code-lang-tag.clickable').forEach(el => {
+        el.classList.remove('clickable');
+        el.removeAttribute('onclick');
+        el.removeAttribute('title');
+    });
 
     const mediaEls = Array.from(tempDiv.querySelectorAll('img, video'));
     if (mediaEls.length === 0) return tempDiv.innerHTML;

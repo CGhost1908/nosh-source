@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="view.css?v=3.0">
+    <link rel="stylesheet" href="view.css?v=3.1">
     
     <style>
         /* Fail-safe inline styles to prevent browser cache mismatch */
@@ -171,9 +171,41 @@
         .code-block-wrapper + .code-block-wrapper {
             margin-top: 12px;
         }
-        .code-action-btn.delete {
-            display: none !important;
+        .code-window-dots {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
+        .code-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            opacity: 0.85;
+        }
+        .code-dot.red { background: #ff5f56; }
+        .code-dot.yellow { background: #ffbd2e; }
+        .code-dot.green { background: #27c93f; }
+        .code-lang-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-transform: none;
+            cursor: default;
+        }
+        .code-lang-tag .lang-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .code-action-btn.delete,
+        .code-action-btn.move-up-btn,
+        .code-action-btn.move-down-btn,
+        .code-action-btn.wrap-btn,
+        .code-block-wrapper .block-drag-handle,
         .code-lang-tag .lang-caret {
             display: none !important;
         }
@@ -439,8 +471,8 @@
         function sanitizeNoteHTML(html) {
             if (!window.DOMPurify) return null;
             return window.DOMPurify.sanitize(html || '', {
-                ADD_TAGS: ['source'],
-                ADD_ATTR: ['language'],
+                ADD_TAGS: ['source', 'iconify-icon'],
+                ADD_ATTR: ['language', 'icon'],
                 FORBID_TAGS: ['style', 'form', 'iframe', 'object', 'embed'],
                 FORBID_ATTR: ['srcdoc', 'formaction']
             });
@@ -461,25 +493,80 @@
             initInteractiveElements(container);
         }
 
+        const VIEWER_LANGUAGES = [
+            { name: 'Python', mode: 'python', icon: 'logos:python', aliases: ['py', 'python'] },
+            { name: 'JavaScript', mode: 'javascript', icon: 'logos:javascript', aliases: ['js', 'javascript', 'node'] },
+            { name: 'TypeScript', mode: 'javascript', icon: 'logos:typescript-icon', aliases: ['ts', 'typescript'] },
+            { name: 'Rust', mode: 'rust', icon: 'logos:rust', aliases: ['rs', 'rust'] },
+            { name: 'Go', mode: 'go', icon: 'logos:go', aliases: ['go', 'golang'] },
+            { name: 'C++', mode: 'text/x-c++src', icon: 'logos:c-plusplus', aliases: ['c++', 'cpp', 'x-c++src'] },
+            { name: 'C#', mode: 'text/x-csharp', icon: 'logos:c-sharp', aliases: ['c#', 'csharp', 'x-csharp'] },
+            { name: 'C', mode: 'text/x-csrc', icon: 'logos:c', aliases: ['c', 'x-csrc'] },
+            { name: 'Java', mode: 'text/x-java', icon: 'logos:java', aliases: ['java', 'x-java'] },
+            { name: 'Kotlin', mode: 'text/x-kotlin', icon: 'logos:kotlin-icon', aliases: ['kt', 'kotlin'] },
+            { name: 'Dart', mode: 'dart', icon: 'logos:dart', aliases: ['dart'] },
+            { name: 'Swift', mode: 'swift', icon: 'logos:swift', aliases: ['swift'] },
+            { name: 'HTML', mode: 'xml', icon: 'logos:html-5', aliases: ['html', 'htmlmixed', 'xml'] },
+            { name: 'CSS', mode: 'css', icon: 'logos:css-3', aliases: ['css'] },
+            { name: 'SQL', mode: 'sql', icon: 'vscode-icons:file-type-sql', aliases: ['sql', 'mysql', 'postgres'] },
+            { name: 'Bash / Shell', mode: 'shell', icon: 'logos:bash-icon', aliases: ['sh', 'bash', 'shell', 'zsh'] },
+            { name: 'JSON', mode: 'javascript', icon: 'vscode-icons:file-type-json', aliases: ['json'] },
+            { name: 'YAML', mode: 'yaml', icon: 'vscode-icons:file-type-yaml', aliases: ['yaml', 'yml'] },
+            { name: 'Markdown', mode: 'markdown', icon: 'logos:markdown', aliases: ['md', 'markdown'] },
+            { name: 'PHP', mode: 'php', icon: 'logos:php', aliases: ['php'] },
+            { name: 'Ruby', mode: 'ruby', icon: 'logos:ruby', aliases: ['rb', 'ruby'] },
+            { name: 'Vue', mode: 'xml', icon: 'logos:vue', aliases: ['vue'] },
+            { name: 'React', mode: 'javascript', icon: 'logos:react', aliases: ['react', 'jsx', 'tsx'] },
+            { name: 'Lua', mode: 'lua', icon: 'logos:lua', aliases: ['lua'] },
+            { name: 'R', mode: 'r', icon: 'logos:r-lang', aliases: ['r'] }
+        ];
+
+        function getViewerLanguageMeta(raw) {
+            const cleaned = String(raw || '').trim();
+            const lower = cleaned.toLowerCase();
+            if (!lower) {
+                return { name: 'JavaScript', mode: 'javascript', icon: 'logos:javascript' };
+            }
+            const exact = VIEWER_LANGUAGES.find(l =>
+                l.name.toLowerCase() === lower ||
+                l.mode.toLowerCase() === lower ||
+                l.aliases.includes(lower)
+            );
+            if (exact) return exact;
+            const partial = VIEWER_LANGUAGES.find(l =>
+                l.aliases.some(a => a.length > 1 && lower.includes(a))
+            );
+            if (partial) return partial;
+            return { name: cleaned, mode: 'javascript', icon: 'solar:code-square-linear' };
+        }
+
         function mapLanguageMode(raw) {
-            if (!raw) return 'javascript';
-            const lower = raw.toLowerCase().trim();
-            if (lower.includes('py')) return 'python';
-            if (lower.includes('rust')) return 'rust';
-            if (lower.includes('go')) return 'go';
-            if (lower.includes('swift')) return 'swift';
-            if (lower.includes('c++') || lower.includes('cpp')) return 'text/x-c++src';
-            if (lower === 'c' || lower.includes('x-csrc')) return 'text/x-csrc';
-            if (lower.includes('java')) return 'text/x-java';
-            if (lower.includes('sql')) return 'sql';
-            if (lower.includes('sh') || lower.includes('bash')) return 'shell';
-            if (lower.includes('html') || lower.includes('xml')) return 'xml';
-            if (lower.includes('css')) return 'css';
-            if (lower.includes('json')) return 'javascript';
-            if (lower.includes('yaml') || lower.includes('yml')) return 'yaml';
-            if (lower.includes('markdown') || lower.includes('md')) return 'markdown';
-            if (lower.includes('ts') || lower.includes('typescript')) return 'javascript';
-            return 'javascript';
+            return getViewerLanguageMeta(raw).mode;
+        }
+
+        function buildViewerCodeHeader(rawLang) {
+            const meta = getViewerLanguageMeta(rawLang);
+            const header = document.createElement('div');
+            header.className = 'code-block-header';
+            header.innerHTML = `
+                <div class="code-header-left">
+                    <div class="code-window-dots">
+                        <span class="code-dot red"></span>
+                        <span class="code-dot yellow"></span>
+                        <span class="code-dot green"></span>
+                    </div>
+                    <span class="code-lang-tag">
+                        <iconify-icon class="lang-icon"></iconify-icon>
+                        <span class="lang-name"></span>
+                    </span>
+                </div>
+                <div class="code-block-actions">
+                    <button class="code-action-btn copy-btn" title="Copy code"><iconify-icon icon="solar:copy-linear"></iconify-icon> Copy</button>
+                </div>
+            `;
+            header.querySelector('.lang-icon').setAttribute('icon', meta.icon);
+            header.querySelector('.lang-name').textContent = meta.name;
+            return header;
         }
 
         function upgradeLegacyBlocksInDOM(container) {
@@ -507,19 +594,7 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'code-block-wrapper';
 
-                const header = document.createElement('div');
-                header.className = 'code-block-header';
-                header.innerHTML = `
-                    <div class="code-header-left">
-                        <span class="code-lang-tag"></span>
-                    </div>
-                    <div class="code-block-actions">
-                        <button class="code-action-btn wrap-btn" title="Toggle line wrap">Wrap</button>
-                        <button class="code-action-btn copy-btn" title="Copy code">Copy</button>
-                    </div>
-                `;
-                // rawLang comes from note text, so never interpolate it into HTML
-                header.querySelector('.code-lang-tag').textContent = rawLang;
+                const header = buildViewerCodeHeader(rawLang);
 
                 const newTa = document.createElement('textarea');
                 newTa.className = 'code';
@@ -865,15 +940,10 @@
                         i++;
                     }
                     i++;
+                    const headerHtml = buildViewerCodeHeader(lang || 'javascript').outerHTML;
                     htmlParts.push(`
                         <div class="code-block-wrapper">
-                            <div class="code-block-header">
-                                <div class="code-header-left"><span class="code-lang-tag">${escapeHtml(lang || 'code')}</span></div>
-                                <div class="code-block-actions">
-                                    <button class="code-action-btn wrap-btn">Wrap</button>
-                                    <button class="code-action-btn copy-btn">Copy</button>
-                                </div>
-                            </div>
+                            ${headerHtml}
                             <textarea class="code" language="${escapeHtml(lang || 'javascript')}">${escapeHtml(codeLines.join('\n'))}</textarea>
                         </div>
                     `.trim());
@@ -911,7 +981,9 @@
             upgradeLegacyBlocksInDOM(container);
             convertMarkdownTablesInDOM(container);
             wrapBareTablesInDOM(container);
-            container.querySelectorAll('.table-col-resizer').forEach(el => el.remove());
+            container.querySelectorAll(
+                '.table-col-resizer, .code-block-wrapper .block-drag-handle, .code-block-wrapper .move-up-btn, .code-block-wrapper .move-down-btn, .code-block-wrapper .wrap-btn, .code-block-wrapper .code-action-btn.delete, .code-block-wrapper .lang-caret'
+            ).forEach(el => el.remove());
 
             const codeBlocks = container.querySelectorAll('.code-block-wrapper');
             codeBlocks.forEach(wrapper => {
@@ -922,6 +994,33 @@
                 const mode = mapLanguageMode(rawLang);
                 const initialCode = ta.value || ta.textContent || '';
                 ta.value = initialCode;
+
+                const langTag = wrapper.querySelector('.code-lang-tag');
+                if (langTag) {
+                    langTag.classList.remove('clickable');
+                    langTag.removeAttribute('onclick');
+                    langTag.removeAttribute('title');
+
+                    const rawLabel = (langTag.querySelector('.lang-name')?.textContent || langTag.textContent || '').trim();
+                    const existingIcon = langTag.querySelector('.lang-icon');
+                    const existingIconAttr = existingIcon ? (existingIcon.getAttribute('icon') || '') : '';
+                    const hasValidIcon = /^[a-z0-9-]+:[a-z0-9-]+$/i.test(existingIconAttr);
+                    const meta = getViewerLanguageMeta(rawLabel || rawLang);
+
+                    if (!existingIcon || !hasValidIcon || !langTag.querySelector('.lang-name')) {
+                        langTag.innerHTML = '';
+                        const iconEl = document.createElement('iconify-icon');
+                        iconEl.className = 'lang-icon';
+                        iconEl.setAttribute('icon', hasValidIcon ? existingIconAttr : meta.icon);
+                        const nameEl = document.createElement('span');
+                        nameEl.className = 'lang-name';
+                        nameEl.textContent = rawLabel || meta.name;
+                        langTag.appendChild(iconEl);
+                        langTag.appendChild(nameEl);
+                    }
+                } else if (!wrapper.querySelector('.code-block-header')) {
+                    wrapper.insertBefore(buildViewerCodeHeader(rawLang), wrapper.firstChild);
+                }
 
                 let cm = null;
                 if (window.CodeMirror) {
@@ -949,23 +1048,22 @@
                     }, 250);
                 }
 
-                const wrapBtn = wrapper.querySelector('.wrap-btn');
-                if (wrapBtn && cm) {
-                    wrapBtn.onclick = () => {
-                        const cur = cm.getOption('lineWrapping');
-                        cm.setOption('lineWrapping', !cur);
-                        wrapBtn.classList.toggle('active', !cur);
-                    };
-                }
-
                 const copyBtn = wrapper.querySelector('.copy-btn');
                 if (copyBtn) {
+                    if (!copyBtn.querySelector('iconify-icon')) {
+                        copyBtn.innerHTML = '<iconify-icon icon="solar:copy-linear"></iconify-icon> Copy';
+                    }
+                    const origHtml = copyBtn.innerHTML;
+                    let copyResetTimer = null;
                     copyBtn.onclick = () => {
                         const code = cm ? cm.getValue() : (ta.value || ta.textContent || '');
                         navigator.clipboard.writeText(code).then(() => {
-                            const origText = copyBtn.textContent;
+                            if (copyResetTimer) clearTimeout(copyResetTimer);
                             copyBtn.textContent = 'Copied!';
-                            setTimeout(() => { copyBtn.textContent = origText; }, 1800);
+                            copyResetTimer = setTimeout(() => {
+                                copyBtn.innerHTML = origHtml;
+                                copyResetTimer = null;
+                            }, 1800);
                             showToast('Code copied to clipboard');
                         }).catch(e => {
                             console.error('Copy failed:', e);
