@@ -86,10 +86,175 @@ const { sleep, waitFor, createReporter, createSandbox, launchNosh, forceExit, re
         // The clipboard bridge answers (read only, so the developer's clipboard is left alone)
         check('clipboard bridge works', (await main.evaluate(() => typeof nativeClipboard.readText())) === 'string');
 
-        // New note
+        // Default theme is solarized and local CodeMirror stylesheet loads cleanly without duplicate theme links
+        const cmAssetState = await main.evaluate(() => ({
+            defaultTheme: localStorage.getItem('code-theme'),
+            cmHasSolarized: Boolean(document.querySelector('#content .code-block-wrapper .CodeMirror.cm-s-solarized')),
+            localCmCssLoaded: Boolean(document.querySelector('link[href="node_modules/codemirror/lib/codemirror.css"]')?.sheet),
+            solarizedLinks: document.querySelectorAll('link[href$="/solarized.css"]').length
+        }));
+        check('default code theme is solarized and local CodeMirror CSS loads cleanly',
+            cmAssetState.defaultTheme === 'solarized' && cmAssetState.cmHasSolarized &&
+            cmAssetState.localCmCssLoaded && cmAssetState.solarizedLinks === 1, cmAssetState);
+
+        // New note (save Existing first so switching away is clean)
+        await main.evaluate(async () => { await saveFile(); });
         await main.evaluate(() => createNewFile());
         await waitFor(() => fs.readdirSync(sandbox.saves).some(f => f.startsWith('Untitled')), 10000, 'new note file');
+        await waitFor(() => main.evaluate(() => activeNoteName && activeNoteName.startsWith('Untitled')), 10000, 'new note opened');
         check('creating a new note works', true);
+
+        // Reopening a note with code blocks must hydrate CodeMirror & non-preloaded theme CSS immediately (no 30ms raw textarea flash)
+        const reopenState = await main.evaluate(async () => {
+            localStorage.setItem('code-theme', 'ayu-dark');
+            let sawRawTextareaFrame = false;
+            const obs = new MutationObserver(() => {
+                const ta = document.querySelector('#content .code-block-wrapper textarea.code');
+                const cm = document.querySelector('#content .code-block-wrapper .CodeMirror');
+                if (ta && !cm && getComputedStyle(ta).display !== 'none') {
+                    sawRawTextareaFrame = true;
+                }
+            });
+            obs.observe(content, { childList: true, subtree: true });
+            await openDesiredFile('Existing');
+            obs.disconnect();
+
+            const wrapper = document.querySelector('#content .code-block-wrapper');
+            const cmEl = wrapper ? wrapper.querySelector('.CodeMirror') : null;
+            const ta = wrapper ? wrapper.querySelector('textarea.code') : null;
+            const cs = cmEl ? getComputedStyle(cmEl) : null;
+            return {
+                sawRawTextareaFrame,
+                hasCmImmediately: Boolean(cmEl && cmEl.CodeMirror),
+                taHidden: Boolean(ta && ta.style.display === 'none'),
+                hasMoveBtns: Boolean(wrapper && wrapper.querySelector('.move-up-btn') && wrapper.querySelector('.move-down-btn')),
+                themeSheetLoaded: Boolean(document.querySelector('link[data-code-theme="ayu-dark"]')?.sheet),
+                cmPosition: cs ? cs.position : null,
+                cmHeight: cmEl ? cmEl.getBoundingClientRect().height : 0
+            };
+        });
+        check('opening note renders hydrated CodeMirror & theme synchronously with zero raw-textarea flash',
+            !reopenState.sawRawTextareaFrame &&
+            reopenState.hasCmImmediately &&
+            reopenState.taHidden &&
+            reopenState.hasMoveBtns &&
+            reopenState.themeSheetLoaded &&
+            reopenState.cmPosition === 'relative' &&
+            reopenState.cmHeight > 0,
+            reopenState);
+
+        // Settings -> Code Themes uses Previous / Next carousel + searchable dropdown across all 64 themes
+        const expectedThemes = fs.readdirSync(path.join(__dirname, '..', 'src', 'code-theme'))
+            .filter(f => f.endsWith('.css') && f !== 'ambiance-mobile.css')
+            .map(f => path.basename(f, '.css'));
+        await main.evaluate(() => {
+            openSettingsModal();
+            switchSettingsTab('code-themes');
+        });
+        await main.waitForSelector('#theme-picker-trigger', { timeout: 5000 });
+
+        const carouselLayout = await main.evaluate(() => ({
+            hasGrid: Boolean(document.getElementById('themes-grid')),
+            hasPrev: Boolean(document.getElementById('theme-prev-btn')),
+            hasNext: Boolean(document.getElementById('theme-next-btn')),
+            currentName: document.getElementById('theme-current-name')?.textContent?.trim(),
+            indexBadge: document.getElementById('theme-index-badge')?.textContent?.trim(),
+            previewWidth: document.getElementById('settings-theme-preview')?.getBoundingClientRect().width || 0
+        }));
+        check('Code Themes pane shows wide preview and Previous/Next carousel',
+            !carouselLayout.hasGrid && carouselLayout.hasPrev && carouselLayout.hasNext &&
+            carouselLayout.currentName === 'ayu-dark' && carouselLayout.indexBadge === '13 / 64' &&
+            carouselLayout.previewWidth > 500,
+            carouselLayout);
+
+        // Next button advances ayu-dark (13/64) -> ayu-mirage (14/64)
+        await main.click('#theme-next-btn');
+        await waitFor(() => main.evaluate(() => {
+            const previewCm = document.querySelector('#settings-theme-preview .CodeMirror');
+            const cmEl = document.querySelector('#content .code-block-wrapper .CodeMirror');
+            return Boolean(
+                document.getElementById('theme-current-name')?.textContent?.trim() === 'ayu-mirage' &&
+                document.getElementById('theme-index-badge')?.textContent?.trim() === '14 / 64' &&
+                previewCm && previewCm.classList.contains('cm-s-ayu-mirage') &&
+                cmEl && cmEl.classList.contains('cm-s-ayu-mirage')
+            );
+        }), 5000, 'Next theme button switches to ayu-mirage');
+        check('Next button switches preview and editor to next theme', true);
+
+        // Previous button goes back (14/64 -> 13/64)
+        await main.click('#theme-prev-btn');
+        await waitFor(() => main.evaluate(() => {
+            const previewCm = document.querySelector('#settings-theme-preview .CodeMirror');
+            return Boolean(
+                document.getElementById('theme-current-name')?.textContent?.trim() === 'ayu-dark' &&
+                document.getElementById('theme-index-badge')?.textContent?.trim() === '13 / 64' &&
+                previewCm && previewCm.classList.contains('cm-s-ayu-dark')
+            );
+        }), 5000, 'Previous theme button returns to ayu-dark');
+        check('Previous button steps backward to prior theme', true);
+
+        // Dropdown opens, Escape closes only dropdown (keeps settings modal open), and search picks any theme
+        await main.click('#theme-picker-trigger');
+        await main.waitForSelector('#theme-picker-dropdown.open .theme-dropdown-item', { timeout: 5000 });
+        const uiThemes = await main.evaluate(() =>
+            Array.from(document.querySelectorAll('#theme-dropdown-list .theme-dropdown-item'))
+                .map(b => b.dataset.theme || b.textContent.trim())
+        );
+        const missingThemes = expectedThemes.filter(t => !uiThemes.includes(t));
+        check('all 64 standalone themes (including yonce) appear in Code Themes dropdown',
+            expectedThemes.length === 64 && missingThemes.length === 0 && uiThemes.includes('yonce'),
+            { count: uiThemes.length, expected: expectedThemes.length, missingThemes });
+
+        await main.press('#theme-search-input', 'Escape');
+        const escapeState = await main.evaluate(() => ({
+            dropdownOpen: document.getElementById('theme-picker-dropdown')?.classList.contains('open'),
+            settingsOpen: document.getElementById('settings-modal')?.classList.contains('active')
+        }));
+        check('Escape closes theme dropdown without closing Settings modal',
+            !escapeState.dropdownOpen && escapeState.settingsOpen,
+            escapeState);
+
+        await main.click('#theme-picker-trigger');
+        await main.fill('#theme-search-input', 'dracula');
+        const visibleAfterFilter = await main.evaluate(() =>
+            Array.from(document.querySelectorAll('#theme-dropdown-list .theme-dropdown-item'))
+                .filter(b => b.style.display !== 'none')
+                .map(b => b.dataset.theme)
+        );
+        check('theme dropdown search filters matching themes',
+            visibleAfterFilter.length === 1 && visibleAfterFilter[0] === 'dracula',
+            visibleAfterFilter);
+
+        await main.click('#theme-dropdown-list .theme-dropdown-item[data-theme="dracula"]');
+        await waitFor(() => main.evaluate(() =>
+            document.getElementById('theme-current-name')?.textContent?.trim() === 'dracula' &&
+            document.getElementById('theme-index-badge')?.textContent?.trim() === '1 / 64' &&
+            !document.getElementById('theme-picker-dropdown')?.classList.contains('open')
+        ), 5000, 'dropdown selects dracula');
+
+        // Previous at 1/64 wraps around to 64/64 (zenburn), and another Previous selects yonce (63/64)
+        await main.click('#theme-prev-btn');
+        await waitFor(() => main.evaluate(() =>
+            document.getElementById('theme-current-name')?.textContent?.trim() === 'zenburn' &&
+            document.getElementById('theme-index-badge')?.textContent?.trim() === '64 / 64'
+        ), 5000, 'Previous wraps from 1/64 to zenburn (64/64)');
+        check('Previous wraps around from first theme (1/64) to last theme (64/64)', true);
+
+        await main.click('#theme-prev-btn');
+        await waitFor(() => main.evaluate(() => {
+            const cmEl = document.querySelector('#content .code-block-wrapper .CodeMirror');
+            const previewCm = document.querySelector('#settings-theme-preview .CodeMirror');
+            return Boolean(
+                document.getElementById('theme-current-name')?.textContent?.trim() === 'yonce' &&
+                document.getElementById('theme-index-badge')?.textContent?.trim() === '63 / 64' &&
+                cmEl && cmEl.classList.contains('cm-s-yonce') &&
+                previewCm && previewCm.classList.contains('cm-s-yonce') &&
+                getComputedStyle(cmEl).backgroundColor === 'rgb(28, 28, 28)' &&
+                getComputedStyle(previewCm).backgroundColor === 'rgb(28, 28, 28)'
+            );
+        }), 5000, 'yonce theme applied');
+        check('Previous reaches yonce (63/64) and applies authentic cm-s-yonce styling', true);
+        await main.evaluate(() => closeAllModals());
 
         // Local OAuth server (express) is listening
         const port = await main.evaluate(() => ipcRenderer.invoke('get-server-port'));

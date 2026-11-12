@@ -3,6 +3,10 @@
 function openSettingsModal() {
     loadSettingsIntoUI();
     openModal('settings-modal');
+    const codePane = document.getElementById('pane-code-themes');
+    if (codePane && codePane.classList.contains('active') && typeof renderSettingsThemes === 'function') {
+        renderSettingsThemes();
+    }
 }
 
 function switchSettingsTab(tabName) {
@@ -19,11 +23,11 @@ function switchSettingsTab(tabName) {
     const activePane = document.getElementById(`pane-${tabName}`);
     if (activePane) activePane.classList.add('active');
 
+    if (tabName !== 'code-themes' && typeof closeThemePickerDropdown === 'function') {
+        closeThemePickerDropdown(false);
+    }
+
     if (tabName === 'code-themes' && typeof renderSettingsThemes === 'function') {
-        const grid = document.getElementById('themes-grid');
-        if (grid && grid.children.length === 0 && typeof showThemesSkeleton === 'function') {
-            showThemesSkeleton(grid, 12);
-        }
         renderSettingsThemes();
     } else if (tabName === 'published' && typeof renderPublishedFilesList === 'function') {
         const pubList = document.getElementById('published-files-list');

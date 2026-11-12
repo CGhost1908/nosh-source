@@ -350,7 +350,11 @@ function attachMediaToolbar(container) {
 function setMediaSize(btnOrEl, size) {
     const container = btnOrEl.closest('.media-container');
     if (!container) return;
-    container.style.width = size;
+    const applyResize = () => {
+        container.style.width = size;
+    };
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyResize);
+    else applyResize();
     hasUnsavedChanges = true;
     if (unsavedDot) unsavedDot.classList.add('active');
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
@@ -368,6 +372,7 @@ function attachMediaResizeHandle(container) {
         e.preventDefault();
         e.stopPropagation();
 
+        const dragTx = window.NoshUndo ? window.NoshUndo.beginTransaction() : null;
         const startX = e.clientX;
         const startWidth = container.offsetWidth;
         container.classList.add('is-resizing');
@@ -385,6 +390,8 @@ function attachMediaResizeHandle(container) {
             window.removeEventListener('mouseup', onMouseUp);
             container.classList.remove('is-resizing');
 
+            if (dragTx) dragTx.commit();
+
             hasUnsavedChanges = true;
             if (unsavedDot) unsavedDot.classList.add('active');
             if (typeof triggerAutoSave === 'function') triggerAutoSave();
@@ -401,7 +408,17 @@ function attachMediaResizeHandle(container) {
 function deleteMediaBlock(btn) {
     const container = btn.closest('.media-container');
     if (container) {
-        container.remove();
+        const applyDelete = () => {
+            const focusTarget = container.nextElementSibling || container.previousElementSibling;
+            container.remove();
+            if (focusTarget && typeof placeCaretInElement === 'function') {
+                placeCaretInElement(focusTarget, true);
+            } else if (content) {
+                content.focus();
+            }
+        };
+        if (window.NoshUndo) window.NoshUndo.runWithUndo(applyDelete);
+        else applyDelete();
         hasUnsavedChanges = true;
         if (unsavedDot) unsavedDot.classList.add('active');
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
@@ -411,64 +428,73 @@ function deleteMediaBlock(btn) {
 }
 
 function insertMediaElement(src, type) {
-    const container = document.createElement('div');
-    container.className = 'media-container resizable';
-    container.setAttribute('contenteditable', 'false');
+    const applyInsertMedia = () => {
+        const container = document.createElement('div');
+        container.className = 'media-container resizable';
+        container.setAttribute('contenteditable', 'false');
 
-    let displaySrc = src;
-    if (src.startsWith('assets/') && savesDir) {
-        displaySrc = toLocalMediaUrl(path.join(savesDir, src));
-    }
-
-    if (type === 'image') {
-        const img = document.createElement('img');
-        img.src = displaySrc;
-        if (src.startsWith('assets/')) {
-            img.setAttribute('data-asset-rel', src);
+        let displaySrc = src;
+        if (src.startsWith('assets/') && savesDir) {
+            displaySrc = toLocalMediaUrl(path.join(savesDir, src));
         }
-        img.alt = 'Inserted Image';
-        img.style.maxWidth = '100%';
-        container.appendChild(img);
-    } else {
-        const video = document.createElement('video');
-        video.src = displaySrc;
-        if (src.startsWith('assets/')) {
-            video.setAttribute('data-asset-rel', src);
+
+        if (type === 'image') {
+            const img = document.createElement('img');
+            img.src = displaySrc;
+            if (src.startsWith('assets/')) {
+                img.setAttribute('data-asset-rel', src);
+            }
+            img.alt = 'Inserted Image';
+            img.style.maxWidth = '100%';
+            container.appendChild(img);
+        } else {
+            const video = document.createElement('video');
+            video.src = displaySrc;
+            if (src.startsWith('assets/')) {
+                video.setAttribute('data-asset-rel', src);
+            }
+            video.controls = true;
+            video.style.maxWidth = '100%';
+            container.appendChild(video);
         }
-        video.controls = true;
-        video.style.maxWidth = '100%';
-        container.appendChild(video);
-    }
 
-    attachMediaToolbar(container);
-    attachMediaResizeHandle(container);
+        attachMediaToolbar(container);
+        attachMediaResizeHandle(container);
 
-    // Insert at caret or after current block if inside #content
-    const sel = window.getSelection();
-    let insertRef = null;
-    if (sel && sel.rangeCount > 0 && content && content.contains(sel.anchorNode)) {
-        let node = sel.getRangeAt(0).startContainer;
-        while (node && node.parentElement !== content) {
-            node = node.parentElement;
+        // Insert at caret or after current block if inside #content
+        const sel = window.getSelection();
+        let insertRef = null;
+        if (sel && sel.rangeCount > 0 && content && content.contains(sel.anchorNode)) {
+            let node = sel.getRangeAt(0).startContainer;
+            while (node && node.parentElement !== content) {
+                node = node.parentElement;
+            }
+            if (node && node.parentElement === content) {
+                insertRef = node;
+            }
         }
-        if (node && node.parentElement === content) {
-            insertRef = node;
+
+        if (insertRef && insertRef.nextSibling) {
+            content.insertBefore(container, insertRef.nextSibling);
+        } else {
+            content.appendChild(container);
         }
-    }
 
-    if (insertRef && insertRef.nextSibling) {
-        content.insertBefore(container, insertRef.nextSibling);
-    } else {
-        content.appendChild(container);
-    }
+        let emptyLine = container.nextElementSibling;
+        if (!emptyLine) {
+            emptyLine = document.createElement('p');
+            emptyLine.innerHTML = '<br>';
+            content.appendChild(emptyLine);
+        }
+        if (typeof placeCaretInElement === 'function') {
+            placeCaretInElement(emptyLine, true);
+        }
 
-    if (!container.nextSibling) {
-        const emptyLine = document.createElement('p');
-        emptyLine.innerHTML = '<br>';
-        content.appendChild(emptyLine);
-    }
+        initInteractResizable();
+    };
 
-    initInteractResizable();
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyInsertMedia);
+    else applyInsertMedia();
 
     hasUnsavedChanges = true;
     if (unsavedDot) unsavedDot.classList.add('active');
@@ -480,10 +506,16 @@ function insertMediaElement(src, type) {
 function initInteractResizable() {
     if (typeof interact === 'undefined') return;
 
+    let interactDragTx = null;
     interact('.resizable')
         .resizable({
             edges: { left: true, right: true, bottom: true, top: false },
             listeners: {
+                start() {
+                    if (window.NoshUndo && !interactDragTx) {
+                        interactDragTx = window.NoshUndo.beginTransaction();
+                    }
+                },
                 move(event) {
                     const target = event.target;
                     let width = event.rect.width;
@@ -492,6 +524,14 @@ function initInteractResizable() {
                     target.style.width = `${width}px`;
                     hasUnsavedChanges = true;
                     if (unsavedDot) unsavedDot.classList.add('active');
+                },
+                end() {
+                    if (interactDragTx) {
+                        interactDragTx.commit();
+                        interactDragTx = null;
+                    }
+                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                    if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
                 }
             }
         });
@@ -855,8 +895,12 @@ async function applyImageCrop() {
 
         if (cropState.mode === 'editor' && cropState.targetImgEl) {
             const relAssetPath = await saveMediaAsset(croppedFile);
-            cropState.targetImgEl.setAttribute('data-asset-rel', relAssetPath);
-            cropState.targetImgEl.src = toLocalMediaUrl(path.join(savesDir, relAssetPath));
+            const applyCropUpdate = () => {
+                cropState.targetImgEl.setAttribute('data-asset-rel', relAssetPath);
+                cropState.targetImgEl.src = toLocalMediaUrl(path.join(savesDir, relAssetPath));
+            };
+            if (window.NoshUndo) window.NoshUndo.runWithUndo(applyCropUpdate);
+            else applyCropUpdate();
 
             hasUnsavedChanges = true;
             if (unsavedDot) unsavedDot.classList.add('active');

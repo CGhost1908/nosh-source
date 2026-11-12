@@ -52,11 +52,15 @@
     function runInEditor(fn, autoExpandWord = false) {
         editorEl.focus();
         restoreRange(autoExpandWord);
-        try {
-            fn();
-        } catch (err) {
-            console.error('Editor action failed:', err);
-        }
+        const invoke = () => {
+            try {
+                fn();
+            } catch (err) {
+                console.error('Editor action failed:', err);
+            }
+        };
+        if (window.NoshUndo) window.NoshUndo.runWithUndo(invoke);
+        else invoke();
         if (typeof triggerAutoSave === 'function') triggerAutoSave();
         if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
     }
@@ -104,7 +108,7 @@
             const sel = ctx.cm.getSelection();
             if (sel) {
                 cb.writeText(sel);
-                ctx.cm.replaceSelection('');
+                ctx.cm.replaceSelection('', null, 'cut');
             }
             return;
         }
@@ -116,7 +120,12 @@
         if (targetRange) {
             const text = targetRange.toString();
             if (text) cb.writeText(text);
-            targetRange.deleteContents();
+            const applyCut = () => {
+                targetRange.deleteContents();
+                selectRange(targetRange);
+            };
+            if (window.NoshUndo) window.NoshUndo.runWithUndo(applyCut);
+            else applyCut();
             if (typeof triggerAutoSave === 'function') triggerAutoSave();
             if (typeof showToast === 'function') showToast('Cut to clipboard', 'info');
         }
@@ -150,7 +159,7 @@
         const html = plain ? null : cb.readHTML();
 
         if (ctx && ctx.cm) {
-            if (text) ctx.cm.replaceSelection(text);
+            if (text) ctx.cm.replaceSelection(text, 'around', 'paste');
             return;
         }
 
@@ -217,6 +226,9 @@
             const cm = ctx.cm;
             const hasCmSel = !!cm.getSelection();
             return [
+                { icon: 'solar:undo-left-linear', label: 'Undo', hint: 'Ctrl+Z', disabled: !(window.NoshUndo && window.NoshUndo.canUndo()), run: () => { if (window.NoshUndo) window.NoshUndo.undo(); } },
+                { icon: 'solar:undo-right-linear', label: 'Redo', hint: 'Ctrl+Y', disabled: !(window.NoshUndo && window.NoshUndo.canRedo()), run: () => { if (window.NoshUndo) window.NoshUndo.redo(); } },
+                '-',
                 { icon: 'solar:scissors-linear', label: 'Cut', hint: 'Ctrl+X', disabled: !hasCmSel, run: handleCut },
                 { icon: 'solar:copy-linear', label: 'Copy', hint: 'Ctrl+C', disabled: !hasCmSel, run: handleCopy },
                 { icon: 'solar:clipboard-linear', label: 'Paste', hint: 'Ctrl+V', run: () => handlePaste(true) },
@@ -267,11 +279,12 @@
             }
             items.push({
                 icon: 'solar:link-broken-linear', label: 'Remove Link', run: () => {
-                    const range = document.createRange();
-                    range.selectNodeContents(ctx.link);
-                    selectRange(range);
-                    document.execCommand('unlink', false, null);
-                    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+                    runInEditor(() => {
+                        const range = document.createRange();
+                        range.selectNodeContents(ctx.link);
+                        selectRange(range);
+                        document.execCommand('unlink', false, null);
+                    }, false);
                     if (typeof showToast === 'function') showToast('Link removed', 'info');
                 }
             });
@@ -281,6 +294,9 @@
         const canCopyOrCut = hasSelection || !!savedWordRange;
 
         items.push(
+            { icon: 'solar:undo-left-linear', label: 'Undo', hint: 'Ctrl+Z', disabled: !(window.NoshUndo && window.NoshUndo.canUndo()), run: () => { if (window.NoshUndo) window.NoshUndo.undo(); } },
+            { icon: 'solar:undo-right-linear', label: 'Redo', hint: 'Ctrl+Y', disabled: !(window.NoshUndo && window.NoshUndo.canRedo()), run: () => { if (window.NoshUndo) window.NoshUndo.redo(); } },
+            '-',
             { icon: 'solar:scissors-linear', label: 'Cut', hint: 'Ctrl+X', disabled: !canCopyOrCut, run: handleCut },
             { icon: 'solar:copy-linear', label: 'Copy', hint: 'Ctrl+C', disabled: !canCopyOrCut, run: handleCopy },
             { icon: 'solar:clipboard-linear', label: 'Paste', hint: 'Ctrl+V', run: () => handlePaste(false) },
@@ -509,7 +525,9 @@
 
         if (e.ctrlKey && !e.shiftKey) {
             const k = e.key.toLowerCase();
-            if (k === 'c') { e.preventDefault(); hideEditorMenu(); handleCopy(); }
+            if (k === 'z') { e.preventDefault(); hideEditorMenu(); if (window.NoshUndo) window.NoshUndo.undo(); }
+            else if (k === 'y') { e.preventDefault(); hideEditorMenu(); if (window.NoshUndo) window.NoshUndo.redo(); }
+            else if (k === 'c') { e.preventDefault(); hideEditorMenu(); handleCopy(); }
             else if (k === 'x') { e.preventDefault(); hideEditorMenu(); handleCut(); }
             else if (k === 'v') { e.preventDefault(); hideEditorMenu(); handlePaste(false); }
             else if (k === 'b') { e.preventDefault(); hideEditorMenu(); fmt('bold', null, true); }
@@ -519,10 +537,15 @@
             else if (k === 's') { e.preventDefault(); hideEditorMenu(); if (typeof saveFile === 'function') saveFile(); }
             else if (k === 'f') { e.preventDefault(); hideEditorMenu(); if (typeof openDocFindBar === 'function') openDocFindBar(); }
         } else if (e.ctrlKey && e.shiftKey) {
-            if (e.key.toLowerCase() === 'v') {
+            const k = e.key.toLowerCase();
+            if (k === 'v') {
                 e.preventDefault();
                 hideEditorMenu();
                 handlePaste(true);
+            } else if (k === 'z') {
+                e.preventDefault();
+                hideEditorMenu();
+                if (window.NoshUndo) window.NoshUndo.redo();
             }
         }
     });

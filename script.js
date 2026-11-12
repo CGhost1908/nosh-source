@@ -74,6 +74,17 @@ function formatDoc(cmd, value = null) {
         showToast('Create or open a note first', 'warning');
         return;
     }
+
+    const lowerCmd = String(cmd || '').toLowerCase();
+    if (lowerCmd === 'undo') {
+        if (window.NoshUndo) window.NoshUndo.undo();
+        return;
+    }
+    if (lowerCmd === 'redo') {
+        if (window.NoshUndo) window.NoshUndo.redo();
+        return;
+    }
+
     // Protect the note's first <h1> header from being converted into another block type or list
     if (content && content.firstElementChild && content.firstElementChild.tagName === 'H1') {
         const firstH1 = content.firstElementChild;
@@ -82,7 +93,6 @@ function formatDoc(cmd, value = null) {
             const range = sel.getRangeAt(0);
             const touchesFirstH1 = firstH1.contains(range.startContainer) || firstH1.contains(range.endContainer) || range.intersectsNode(firstH1);
             if (touchesFirstH1) {
-                const lowerCmd = String(cmd || '').toLowerCase();
                 const lowerVal = String(value || '').toLowerCase();
                 if ((lowerCmd === 'formatblock' && lowerVal !== 'h1' && lowerVal !== '<h1>') ||
                     lowerCmd === 'insertunorderedlist' ||
@@ -95,15 +105,29 @@ function formatDoc(cmd, value = null) {
             }
         }
     }
-    if (value) {
-        document.execCommand(cmd, false, value);
+
+    const prevCleanHtml = typeof getCleanContentHTML === 'function' ? getCleanContentHTML() : null;
+    const execApply = () => {
+        if (value) {
+            document.execCommand(cmd, false, value);
+        } else {
+            document.execCommand(cmd, false, null);
+        }
+        if (typeof ensureNoteFirstHeader === 'function') {
+            ensureNoteFirstHeader(content, activeNoteName, false);
+        }
+        content.focus();
+    };
+
+    if (window.NoshUndo) {
+        window.NoshUndo.runWithUndo(execApply);
     } else {
-        document.execCommand(cmd, false, null);
+        execApply();
     }
-    if (typeof ensureNoteFirstHeader === 'function') {
-        ensureNoteFirstHeader(content, activeNoteName, false);
+
+    if (prevCleanHtml !== null && typeof getCleanContentHTML === 'function' && getCleanContentHTML() !== prevCleanHtml) {
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
     }
-    content.focus();
 }
 
 // Get clean HTML without transient CodeMirror DOM trees
@@ -116,6 +140,9 @@ function getCleanContentHTML() {
     clone.querySelectorAll('.media-resize-handle, .table-col-resizer').forEach(el => el.remove());
     clone.querySelectorAll('.block-drag-handle, .media-drag-handle').forEach(el => el.remove());
     clone.querySelectorAll('h1[data-placeholder]').forEach(el => el.removeAttribute('data-placeholder'));
+    clone.querySelectorAll('.block-moved-highlight, .block-drop-top, .block-drop-bottom, .is-dragging, .is-resizing, .is-active').forEach(el => {
+        el.classList.remove('block-moved-highlight', 'block-drop-top', 'block-drop-bottom', 'is-dragging', 'is-resizing', 'is-active');
+    });
     // Ensure all code textareas have their current value and display cleanly
     const liveTextareas = content.querySelectorAll('textarea.code');
     const cloneTextareas = clone.querySelectorAll('textarea.code');
@@ -158,6 +185,10 @@ async function saveFile() {
         return;
     }
 
+    if (window.NoshUndo) {
+        window.NoshUndo.flushPendingTyping();
+    }
+
     if (typeof ensureNoteFirstHeader === 'function') {
         ensureNoteFirstHeader(content, activeNoteName, false);
     }
@@ -181,6 +212,9 @@ async function saveFile() {
 
         hasUnsavedChanges = false;
         if (unsavedDot) unsavedDot.classList.remove('active');
+        if (window.NoshUndo) {
+            window.NoshUndo.onNoteSaved(safeName, contentHTML);
+        }
 
         // Update mtime and sort sidebar by recent change
         const activeItem = document.querySelector(`.save[data-file="${safeName}"]`);
@@ -888,13 +922,17 @@ function setupFirstHeaderProtection() {
         // Enter inside first <h1> -> move to body paragraph below and sync filename immediately
         if (e.key === 'Enter' && !e.shiftKey && startInH1 && endInH1) {
             e.preventDefault();
-            let nextEl = firstH1.nextElementSibling;
-            if (!nextEl || nextEl.getAttribute('contenteditable') === 'false' || nextEl.tagName === 'TABLE') {
-                nextEl = document.createElement('p');
-                nextEl.innerHTML = '<br>';
-                firstH1.after(nextEl);
-            }
-            placeCaretInElement(nextEl, true);
+            const applyEnter = () => {
+                let nextEl = firstH1.nextElementSibling;
+                if (!nextEl || nextEl.getAttribute('contenteditable') === 'false' || nextEl.tagName === 'TABLE') {
+                    nextEl = document.createElement('p');
+                    nextEl.innerHTML = '<br>';
+                    firstH1.after(nextEl);
+                }
+                placeCaretInElement(nextEl, true);
+            };
+            if (window.NoshUndo) window.NoshUndo.runWithUndo(applyEnter);
+            else applyEnter();
             syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: true, allowUniqueSuffix: true });
             triggerAutoSave();
             return;
@@ -906,22 +944,26 @@ function setupFirstHeaderProtection() {
             // Case 1: Multi-block selection spanning first <h1> and subsequent blocks (e.g. Ctrl+A + Backspace/Delete)
             if (!range.collapsed && touchesH1 && !(startInH1 && endInH1)) {
                 e.preventDefault();
-                // Preserve first <h1> (cannot be deleted) and remove selected content after first <h1>
-                const tailRange = document.createRange();
-                if (firstH1.nextSibling) {
-                    tailRange.setStartBefore(firstH1.nextSibling);
-                    tailRange.setEnd(range.endContainer, range.endOffset);
-                    tailRange.deleteContents();
-                }
-                if (!firstH1.textContent.trim()) {
-                    firstH1.textContent = activeNoteName;
-                }
-                if (content.children.length === 1) {
-                    const p = document.createElement('p');
-                    p.innerHTML = '<br>';
-                    content.appendChild(p);
-                }
-                placeCaretInElement(firstH1.nextElementSibling || firstH1, true);
+                const applyMultiDelete = () => {
+                    // Preserve first <h1> (cannot be deleted) and remove selected content after first <h1>
+                    const tailRange = document.createRange();
+                    if (firstH1.nextSibling) {
+                        tailRange.setStartBefore(firstH1.nextSibling);
+                        tailRange.setEnd(range.endContainer, range.endOffset);
+                        tailRange.deleteContents();
+                    }
+                    if (!firstH1.textContent.trim()) {
+                        firstH1.textContent = activeNoteName;
+                    }
+                    if (content.children.length === 1) {
+                        const p = document.createElement('p');
+                        p.innerHTML = '<br>';
+                        content.appendChild(p);
+                    }
+                    placeCaretInElement(firstH1.nextElementSibling || firstH1, true);
+                };
+                if (window.NoshUndo) window.NoshUndo.runWithUndo(applyMultiDelete);
+                else applyMultiDelete();
                 triggerAutoSave();
                 return;
             }
@@ -932,8 +974,12 @@ function setupFirstHeaderProtection() {
                     const selectedLen = range.toString().length;
                     if (selectedLen >= h1Text.length) {
                         e.preventDefault();
-                        firstH1.innerHTML = '';
-                        placeCaretInElement(firstH1, true);
+                        const clearH1 = () => {
+                            firstH1.innerHTML = '';
+                            placeCaretInElement(firstH1, true);
+                        };
+                        if (window.NoshUndo) window.NoshUndo.runWithUndo(clearH1);
+                        else clearH1();
                         scheduleFirstHeaderSync();
                         triggerAutoSave();
                         return;
@@ -945,8 +991,12 @@ function setupFirstHeaderProtection() {
                     }
                     if (h1Text.length === 1) {
                         e.preventDefault();
-                        firstH1.innerHTML = '';
-                        placeCaretInElement(firstH1, true);
+                        const clearH1 = () => {
+                            firstH1.innerHTML = '';
+                            placeCaretInElement(firstH1, true);
+                        };
+                        if (window.NoshUndo) window.NoshUndo.runWithUndo(clearH1);
+                        else clearH1();
                         scheduleFirstHeaderSync();
                         triggerAutoSave();
                         return;
@@ -959,8 +1009,12 @@ function setupFirstHeaderProtection() {
                     }
                     if (h1Text.length === 1 && isCaretAtStartOfElement(firstH1, range)) {
                         e.preventDefault();
-                        firstH1.innerHTML = '';
-                        placeCaretInElement(firstH1, true);
+                        const clearH1 = () => {
+                            firstH1.innerHTML = '';
+                            placeCaretInElement(firstH1, true);
+                        };
+                        if (window.NoshUndo) window.NoshUndo.runWithUndo(clearH1);
+                        else clearH1();
                         scheduleFirstHeaderSync();
                         triggerAutoSave();
                         return;
@@ -976,12 +1030,16 @@ function setupFirstHeaderProtection() {
                 }
                 if (topBlock && topBlock === firstH1.nextElementSibling && isCaretAtStartOfElement(topBlock, range)) {
                     e.preventDefault();
-                    const blockEmpty = (topBlock.textContent || '').trim() === '' &&
-                        !topBlock.querySelector?.('img, video, table, .code-block-wrapper, .math-formula-block, .claude-embedded-diagram, .checklist-checkbox');
-                    if (blockEmpty && content.children.length > 2) {
-                        topBlock.remove();
-                    }
-                    placeCaretInElement(firstH1, false);
+                    const applyRemoveEmptyBlock = () => {
+                        const blockEmpty = (topBlock.textContent || '').trim() === '' &&
+                            !topBlock.querySelector?.('img, video, table, .code-block-wrapper, .math-formula-block, .claude-embedded-diagram, .checklist-checkbox');
+                        if (blockEmpty && content.children.length > 2) {
+                            topBlock.remove();
+                        }
+                        placeCaretInElement(firstH1, false);
+                    };
+                    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyRemoveEmptyBlock);
+                    else applyRemoveEmptyBlock();
                     return;
                 }
             }
@@ -1003,9 +1061,11 @@ function setupFirstHeaderProtection() {
         }
     });
 
-    content.addEventListener('blur', () => {
+    content.addEventListener('blur', async () => {
         if (!activeNoteName || content.getAttribute('contenteditable') === 'false') return;
-        syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: true, allowUniqueSuffix: true });
+        if (window.NoshUndo) window.NoshUndo.flushPendingTyping();
+        await syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: true, allowUniqueSuffix: true });
+        if (window.NoshUndo) window.NoshUndo.syncSilentState();
     });
 }
 
@@ -1016,6 +1076,13 @@ window.sanitizeNoteTitleToFileName = sanitizeNoteTitleToFileName;
 
 // Change Tracking & Auto-Save
 let autoSaveTimer = null;
+
+function clearAutoSaveTimer() {
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+    }
+}
 
 function triggerAutoSave() {
     if (!activeNoteName) return;
@@ -1338,9 +1405,21 @@ function replaceCurrentMatch() {
 
     const range = docFindMatches[docFindCurrentIndex - 1];
     if (range) {
-        range.deleteContents();
-        const textNode = document.createTextNode(replacement);
-        range.insertNode(textNode);
+        const applyReplace = () => {
+            range.deleteContents();
+            const textNode = document.createTextNode(replacement);
+            range.insertNode(textNode);
+            const afterRange = document.createRange();
+            afterRange.setStartAfter(textNode);
+            afterRange.collapse(true);
+            const sel = window.getSelection();
+            if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(afterRange);
+            }
+        };
+        if (window.NoshUndo) window.NoshUndo.runWithUndo(applyReplace);
+        else applyReplace();
         triggerAutoSave();
         showToast('Match replaced', 'info');
         performDocSearch(false);
@@ -1357,28 +1436,35 @@ function replaceAllMatches() {
     if (!query) return;
 
     let count = 0;
-    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
-        acceptNode: (node) => {
-            if (node.parentElement && node.parentElement.closest('.CodeMirror')) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        }
-    });
-
     const regex = new RegExp(escapeRegex(query), 'gi');
-    const nodesToReplace = [];
-    while (walker.nextNode()) {
-        if (regex.test(walker.currentNode.nodeValue)) {
-            nodesToReplace.push(walker.currentNode);
-        }
-    }
+    const applyReplaceAll = () => {
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => {
+                if (node.parentElement && node.parentElement.closest('.CodeMirror')) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        });
 
-    nodesToReplace.forEach(node => {
-        const matches = node.nodeValue.match(regex);
-        if (matches) count += matches.length;
-        node.nodeValue = node.nodeValue.replace(regex, replacement);
-    });
+        const nodesToReplace = [];
+        while (walker.nextNode()) {
+            regex.lastIndex = 0;
+            if (regex.test(walker.currentNode.nodeValue)) {
+                nodesToReplace.push(walker.currentNode);
+            }
+        }
+
+        nodesToReplace.forEach(node => {
+            regex.lastIndex = 0;
+            const matches = node.nodeValue.match(regex);
+            if (matches) count += matches.length;
+            node.nodeValue = node.nodeValue.replace(regex, replacement);
+        });
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyReplaceAll);
+    else applyReplaceAll();
 
     if (count > 0) {
         triggerAutoSave();
@@ -1448,49 +1534,57 @@ function insertChecklist() {
         return;
     }
 
-    const item = document.createElement('div');
-    item.className = 'checklist-item';
-    item.setAttribute('contenteditable', 'false');
-    item.innerHTML = `
+    const applyInsert = () => {
+        const item = document.createElement('div');
+        item.className = 'checklist-item';
+        item.setAttribute('contenteditable', 'false');
+        item.innerHTML = `
         <input type="checkbox" class="checklist-checkbox" onchange="toggleChecklistItem(this)">
         <span class="checklist-text" contenteditable="true" placeholder="To-do item..."></span>
     `;
 
-    const sel = window.getSelection();
-    let block = null;
-    if (sel && sel.rangeCount > 0) {
-        let node = sel.getRangeAt(0).startContainer;
-        while (node && node.parentElement !== content) {
-            node = node.parentElement;
+        const sel = window.getSelection();
+        let block = null;
+        if (sel && sel.rangeCount > 0) {
+            let node = sel.getRangeAt(0).startContainer;
+            while (node && node.parentElement !== content) {
+                node = node.parentElement;
+            }
+            if (node && node.parentElement === content) {
+                block = node;
+            }
         }
-        if (node && node.parentElement === content) {
-            block = node;
-        }
-    }
 
-    if (block) {
-        if (block.textContent.trim() === '') {
-            content.replaceChild(item, block);
+        if (block) {
+            if (block.textContent.trim() === '') {
+                content.replaceChild(item, block);
+            } else {
+                content.insertBefore(item, block.nextSibling);
+            }
         } else {
-            content.insertBefore(item, block.nextSibling);
+            content.appendChild(item);
         }
-    } else {
-        content.appendChild(item);
-    }
 
-    const nextLine = document.createElement('p');
-    nextLine.innerHTML = '<br>';
-    if (item.nextSibling) {
-        content.insertBefore(nextLine, item.nextSibling);
-    } else {
-        content.appendChild(nextLine);
-    }
+        const nextLine = document.createElement('p');
+        nextLine.innerHTML = '<br>';
+        if (item.nextSibling) {
+            content.insertBefore(nextLine, item.nextSibling);
+        } else {
+            content.appendChild(nextLine);
+        }
 
-    const textSpan = item.querySelector('.checklist-text');
-    if (textSpan) {
-        setTimeout(() => textSpan.focus(), 50);
-        textSpan.addEventListener('keydown', handleChecklistKeydown);
-    }
+        const textSpan = item.querySelector('.checklist-text');
+        if (textSpan) {
+            textSpan.focus();
+            if (typeof placeCaretInElement === 'function') {
+                placeCaretInElement(textSpan, true);
+            }
+            textSpan.addEventListener('keydown', handleChecklistKeydown);
+        }
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyInsert);
+    else applyInsert();
 
     triggerAutoSave();
     showToast('Checklist item added', 'info');
@@ -1502,66 +1596,69 @@ function insertTable(rows = 3, cols = 3) {
         return;
     }
 
-    const container = document.createElement('div');
-    container.className = 'table-container';
+    const applyInsertTable = () => {
+        const container = document.createElement('div');
+        container.className = 'table-container';
 
-    let tableHtml = '<table><thead><tr>';
-    for (let c = 1; c <= cols; c++) {
-        tableHtml += `<th>Header ${c}</th>`;
-    }
-    tableHtml += '</tr></thead><tbody>';
-    for (let r = 1; r <= rows; r++) {
-        tableHtml += '<tr>';
+        let tableHtml = '<table><thead><tr>';
         for (let c = 1; c <= cols; c++) {
-            tableHtml += `<td>Cell ${r},${c}</td>`;
+            tableHtml += `<th>Header ${c}</th>`;
         }
-        tableHtml += '</tr>';
-    }
-    tableHtml += '</tbody></table>';
-    container.innerHTML = tableHtml;
+        tableHtml += '</tr></thead><tbody>';
+        for (let r = 1; r <= rows; r++) {
+            tableHtml += '<tr>';
+            for (let c = 1; c <= cols; c++) {
+                tableHtml += `<td>Cell ${r},${c}</td>`;
+            }
+            tableHtml += '</tr>';
+        }
+        tableHtml += '</tbody></table>';
+        container.innerHTML = tableHtml;
 
-    const sel = window.getSelection();
-    let block = null;
-    if (sel && sel.rangeCount > 0) {
-        let node = sel.getRangeAt(0).startContainer;
-        while (node && node.parentElement !== content) {
-            node = node.parentElement;
+        const sel = window.getSelection();
+        let block = null;
+        if (sel && sel.rangeCount > 0) {
+            let node = sel.getRangeAt(0).startContainer;
+            while (node && node.parentElement !== content) {
+                node = node.parentElement;
+            }
+            if (node && node.parentElement === content) {
+                block = node;
+            }
         }
-        if (node && node.parentElement === content) {
-            block = node;
-        }
-    }
 
-    if (block) {
-        if (block.textContent.trim() === '') {
-            content.replaceChild(container, block);
+        if (block) {
+            if (block.textContent.trim() === '') {
+                content.replaceChild(container, block);
+            } else {
+                content.insertBefore(container, block.nextSibling);
+            }
         } else {
-            content.insertBefore(container, block.nextSibling);
+            content.appendChild(container);
         }
-    } else {
-        content.appendChild(container);
-    }
 
-    const nextLine = document.createElement('p');
-    nextLine.innerHTML = '<br>';
-    if (container.nextSibling) {
-        content.insertBefore(nextLine, container.nextSibling);
-    } else {
-        content.appendChild(nextLine);
-    }
+        const nextLine = document.createElement('p');
+        nextLine.innerHTML = '<br>';
+        if (container.nextSibling) {
+            content.insertBefore(nextLine, container.nextSibling);
+        } else {
+            content.appendChild(nextLine);
+        }
 
-    const firstCell = container.querySelector('th, td');
-    if (firstCell) {
-        setTimeout(() => {
+        attachTableColumnResizers(container.querySelector('table'));
+
+        const firstCell = container.querySelector('th, td');
+        if (firstCell) {
             const range = document.createRange();
             const s = window.getSelection();
             range.selectNodeContents(firstCell);
             s.removeAllRanges();
             s.addRange(range);
-        }, 50);
-    }
+        }
+    };
 
-    attachTableColumnResizers(container.querySelector('table'));
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyInsertTable);
+    else applyInsertTable();
 
     triggerAutoSave();
     showToast('Table inserted', 'info');
@@ -1589,9 +1686,14 @@ function attachTableColumnResizers(table) {
             e.preventDefault();
             e.stopPropagation();
 
+            const dragTx = window.NoshUndo ? window.NoshUndo.beginTransaction() : null;
+
             const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
             const currentIndex = allCols.indexOf(cell);
-            if (currentIndex === -1) return;
+            if (currentIndex === -1) {
+                if (dragTx) dragTx.cancel();
+                return;
+            }
 
             // Measure and lock initial widths for all columns in this table
             const initialWidths = allCols.map(c => Math.round(c.getBoundingClientRect().width));
@@ -1639,6 +1741,8 @@ function attachTableColumnResizers(table) {
                 handle.classList.remove('is-active');
                 document.body.classList.remove('is-table-resizing');
 
+                if (dragTx) dragTx.commit();
+
                 hasUnsavedChanges = true;
                 if (typeof unsavedDot !== 'undefined' && unsavedDot) unsavedDot.classList.add('active');
                 if (typeof triggerAutoSave === 'function') triggerAutoSave();
@@ -1652,15 +1756,19 @@ function attachTableColumnResizers(table) {
         handle.ondblclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            cell.style.width = 'auto';
-            cell.style.minWidth = '';
-            cell.style.maxWidth = '';
-            const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
-            const hasCustomWidth = allCols.some(c => c.style.width && c.style.width !== 'auto');
-            if (!hasCustomWidth) {
-                table.style.width = 'max-content';
-                table.style.tableLayout = '';
-            }
+            const applyReset = () => {
+                cell.style.width = 'auto';
+                cell.style.minWidth = '';
+                cell.style.maxWidth = '';
+                const allCols = Array.from(firstRow.children).filter(el => el.tagName === 'TH' || el.tagName === 'TD');
+                const hasCustomWidth = allCols.some(c => c.style.width && c.style.width !== 'auto');
+                if (!hasCustomWidth) {
+                    table.style.width = 'max-content';
+                    table.style.tableLayout = '';
+                }
+            };
+            if (window.NoshUndo) window.NoshUndo.runWithUndo(applyReset);
+            else applyReset();
             hasUnsavedChanges = true;
             if (typeof triggerAutoSave === 'function') triggerAutoSave();
         };
@@ -1685,6 +1793,8 @@ function toggleChecklistItem(checkbox) {
     const item = checkbox.closest('.checklist-item');
     if (!item) return;
 
+    const beforeState = window.NoshUndo ? window.NoshUndo.peekCommittedState() : null;
+
     if (checkbox.checked) {
         item.classList.add('completed');
         checkbox.setAttribute('checked', 'checked');
@@ -1692,6 +1802,11 @@ function toggleChecklistItem(checkbox) {
         item.classList.remove('completed');
         checkbox.removeAttribute('checked');
     }
+
+    if (window.NoshUndo && beforeState) {
+        window.NoshUndo.commitFromBaseline(beforeState);
+    }
+
     triggerAutoSave();
 }
 
@@ -1703,15 +1818,19 @@ function handleChecklistKeydown(e) {
         const item = e.target.closest('.checklist-item');
         if (item) {
             e.preventDefault();
-            const p = document.createElement('p');
-            p.innerHTML = '<br>';
-            item.parentNode.replaceChild(p, item);
-            const range = document.createRange();
-            const sel = window.getSelection();
-            range.setStart(p, 0);
-            range.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(range);
+            const removeItem = () => {
+                const p = document.createElement('p');
+                p.innerHTML = '<br>';
+                item.parentNode.replaceChild(p, item);
+                const range = document.createRange();
+                const sel = window.getSelection();
+                range.setStart(p, 0);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            };
+            if (window.NoshUndo) window.NoshUndo.runWithUndo(removeItem);
+            else removeItem();
             triggerAutoSave();
         }
     }
@@ -1721,9 +1840,12 @@ function handleChecklistKeydown(e) {
 function processChecklists() {
     document.querySelectorAll('.checklist-item').forEach(item => {
         const cb = item.querySelector('.checklist-checkbox');
-        if (cb && !cb.hasAttribute('onchange')) {
-            cb.setAttribute('onchange', 'toggleChecklistItem(this)');
+        if (cb) {
+            if (!cb.hasAttribute('onchange')) {
+                cb.setAttribute('onchange', 'toggleChecklistItem(this)');
+            }
             if (cb.checked) item.classList.add('completed');
+            else item.classList.remove('completed');
         }
         const text = item.querySelector('.checklist-text');
         if (text) {
@@ -1940,7 +2062,8 @@ document.addEventListener('keydown', (e) => {
     const code = e.code || '';
     const activeEl = document.activeElement;
     const insideCM = activeEl && activeEl.closest('.CodeMirror');
-    const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+    const isCheckboxInput = activeEl && activeEl.tagName === 'INPUT' && activeEl.classList.contains('checklist-checkbox');
+    const isInput = activeEl && ((activeEl.tagName === 'INPUT' && !isCheckboxInput) || (activeEl.tagName === 'TEXTAREA' && !insideCM));
     const contentEl = document.getElementById('content');
     const sel = window.getSelection();
     const isInsideContent = contentEl && (
@@ -1949,9 +2072,28 @@ document.addEventListener('keydown', (e) => {
         (sel && sel.anchorNode && contentEl.contains(sel.anchorNode))
     );
 
+    const mod = (e.ctrlKey || e.metaKey) && !e.altKey;
+    if (mod && !e.defaultPrevented && !insideCM && !isInput && typeof activeNoteName !== 'undefined' && activeNoteName && contentEl && contentEl.getAttribute('contenteditable') !== 'false') {
+        const hasActiveModal = Boolean(document.querySelector('.modal-overlay.active'));
+        if (!hasActiveModal) {
+            const isZ = key === 'z' || (!/^[a-z]$/i.test(key) && code === 'KeyZ');
+            const isY = key === 'y' || (!/^[a-z]$/i.test(key) && code === 'KeyY');
+            if (!e.shiftKey && isZ) {
+                e.preventDefault();
+                if (window.NoshUndo) window.NoshUndo.undo();
+                return;
+            }
+            if ((e.shiftKey && isZ) || (!e.shiftKey && isY)) {
+                e.preventDefault();
+                if (window.NoshUndo) window.NoshUndo.redo();
+                return;
+            }
+        }
+    }
+
     // Ctrl+A: Select All Note Content (when inside editor and not in CodeMirror or an input)
     if (e.ctrlKey && !e.shiftKey && (key === 'a' || code === 'KeyA')) {
-        if (isInsideContent && !insideCM && !isInput && contentEl) {
+        if (isInsideContent && !insideCM && !(activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) && contentEl) {
             e.preventDefault();
             const range = document.createRange();
             range.selectNodeContents(contentEl);
@@ -2539,20 +2681,36 @@ function isMarkdownTableSeparator(line) {
 }
 
 function buildCodeBlockHtmlString(code, rawLang) {
-    const cleanLang = (rawLang || 'javascript').trim().toLowerCase();
+    let cleanLang = (rawLang || '').trim().toLowerCase();
     if (['latex', 'tex', 'math', 'katex'].includes(cleanLang)) {
         if (typeof createMathFormulaElement === 'function') {
             return createMathFormulaElement(code.trim(), true).outerHTML;
         }
         return `<div class="math-formula-block" contenteditable="false" data-latex="${escapeHtml(code.trim())}" data-display-mode="true">${escapeHtml(code.trim())}</div>`;
     }
+
+    let langMeta = null;
+    if (cleanLang && typeof getLanguageMeta === 'function') {
+        langMeta = getLanguageMeta(cleanLang, cleanLang);
+    }
+    // Auto-detect language from code content if not explicitly specified or if generic fallback
+    if ((!langMeta || !cleanLang || cleanLang === 'text' || cleanLang === 'plain' || cleanLang === 'javascript') && typeof detectCodeLanguage === 'function') {
+        const detected = detectCodeLanguage(code);
+        if (detected && (detected.name !== 'JavaScript' || !cleanLang)) {
+            langMeta = detected;
+        }
+    }
+    if (!langMeta) {
+        langMeta = typeof getLanguageMeta === 'function'
+            ? getLanguageMeta(cleanLang || 'javascript')
+            : { name: cleanLang || 'JavaScript', mode: cleanLang || 'javascript', icon: 'solar:code-square-linear' };
+    }
+
     if (typeof buildCodeBlockElement === 'function') {
-        const wrapper = buildCodeBlockElement(code, cleanLang);
+        const wrapper = buildCodeBlockElement(langMeta.mode, langMeta.name, code);
         return wrapper.outerHTML;
     }
-    const langMeta = typeof getLanguageMeta === 'function'
-        ? getLanguageMeta(cleanLang)
-        : { name: cleanLang, mode: cleanLang, icon: 'solar:code-square-linear' };
+
     return `
         <div class="code-block-wrapper" contenteditable="false">
             <div class="code-block-header">
@@ -2980,6 +3138,11 @@ function isUntouchedPlaceholderNote(editorEl) {
 }
 
 function insertHtmlNodesIntoEditor(htmlString) {
+    const applyInsert = () => _insertHtmlNodesIntoEditorCore(htmlString);
+    return window.NoshUndo ? window.NoshUndo.runWithUndo(applyInsert) : applyInsert();
+}
+
+function _insertHtmlNodesIntoEditorCore(htmlString) {
     const editorEl = document.getElementById('content');
     if (!editorEl || !htmlString) return false;
 
@@ -3104,7 +3267,7 @@ function finalizeEditorPaste(editorEl, lastNode) {
     if (typeof syncFirstHeaderToNoteName === 'function') {
         syncFirstHeaderToNoteName({ immediate: true, restoreIfEmpty: false, allowUniqueSuffix: true });
     }
-    if (typeof turnToCode === 'function') turnToCode();
+    if (typeof processCodeBlock === 'function') processCodeBlock();
     if (typeof processMathFormulas === 'function') processMathFormulas(editorEl);
     if (typeof processChecklists === 'function') processChecklists();
     if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
@@ -3119,21 +3282,43 @@ function handleSmartEditorPaste({ text = '', html = '', plainOnly = false } = {}
     const cleanText = String(text || '');
     const cleanHtml = String(html || '');
 
-    // If user explicitly chose "Paste as Plain Text" (Ctrl+Shift+V), Still parse Markdown if the clipboard is a Markdown document,
-    // or if plainOnly is false:
-    if (cleanText && isMarkdownContent(cleanText)) {
+    // 1. If text is a detected code snippet (like SQL, Python, JavaScript, Rust, etc.)
+    // and not a multi-element Markdown document (which should be parsed as full Markdown)
+    const isCode = typeof isCodeSnippet === 'function' ? isCodeSnippet(cleanText) : false;
+    const isMd = isMarkdownContent(cleanText);
+
+    if (cleanText && isCode && !isMd) {
+        const langMeta = typeof detectCodeLanguage === 'function' ? detectCodeLanguage(cleanText) : null;
+        const codeBlockHtml = buildCodeBlockHtmlString(cleanText, langMeta ? langMeta.name : 'SQL');
+        if (codeBlockHtml) {
+            return insertHtmlNodesIntoEditor(codeBlockHtml);
+        }
+    }
+
+    // 2. Markdown text
+    if (cleanText && isMd) {
         const converted = markdownToNoshHtml(cleanText);
         if (converted) {
             return insertHtmlNodesIntoEditor(converted);
         }
     }
 
+    // 3. HTML paste
     if (!plainOnly && cleanHtml && cleanHtml.trim()) {
-        // Check if the HTML is just an IDE/editor wrapper around raw Markdown (e.g. VS Code / Cursor clipboard)
         const probe = document.createElement('div');
         probe.innerHTML = cleanHtml;
         const probeText = probe.textContent || '';
         const hasSemanticTags = Boolean(probe.querySelector('h1, h2, h3, h4, table, ul, ol, blockquote, .katex'));
+
+        // If the HTML is an IDE/editor wrapper without semantic HTML structure, and probeText is code
+        if (!hasSemanticTags && typeof isCodeSnippet === 'function' && isCodeSnippet(probeText)) {
+            const langMeta = typeof detectCodeLanguage === 'function' ? detectCodeLanguage(probeText) : null;
+            const codeBlockHtml = buildCodeBlockHtmlString(probeText, langMeta ? langMeta.name : 'SQL');
+            if (codeBlockHtml) {
+                return insertHtmlNodesIntoEditor(codeBlockHtml);
+            }
+        }
+
         if (!hasSemanticTags && isMarkdownContent(probeText)) {
             const converted = markdownToNoshHtml(probeText);
             if (converted) {
@@ -3147,8 +3332,8 @@ function handleSmartEditorPaste({ text = '', html = '', plainOnly = false } = {}
         }
     }
 
+    // 4. Plain multi-line text: convert paragraphs cleanly
     if (cleanText) {
-        // Plain multi-line text without Markdown markers: convert paragraphs cleanly
         if (cleanText.includes('\n')) {
             const converted = markdownToNoshHtml(cleanText);
             if (converted) {
@@ -3184,9 +3369,11 @@ document.addEventListener('paste', async (e) => {
     const html = clipboardData.getData('text/html') || '';
     if (!text && !html) return;
 
+    const isCode = typeof isCodeSnippet === 'function' ? isCodeSnippet(text) : false;
+
     // If user pastes while on Welcome Dashboard (!activeNoteName), auto-create a note and paste into it
     if (!activeNoteName) {
-        if (!isMarkdownContent(text) && !html) return;
+        if (!isMarkdownContent(text) && !html && !isCode) return;
         e.preventDefault();
         e.stopPropagation();
         if (typeof createNewFile === 'function') {
@@ -3199,7 +3386,7 @@ document.addEventListener('paste', async (e) => {
     const editorEl = document.getElementById('content');
     if (!editorEl) return;
 
-    if (isMarkdownContent(text) || (html && html.trim()) || text.includes('\n')) {
+    if (isMarkdownContent(text) || (html && html.trim()) || text.includes('\n') || isCode) {
         const handled = handleSmartEditorPaste({ text, html, plainOnly: false });
         if (handled) {
             e.preventDefault();

@@ -29,11 +29,19 @@ const supportedLanguages = [
 ];
 
 const codeBlockThemes = [
-    "dracula", "darcula", "material", "monokai", "nord",
-    "solarized", "icecoder", "3024-day", "3024-night", "ayu-dark",
-    "base16-dark", "bespin", "blackboard", "cobalt", "duotone-dark",
-    "gruvbox-dark", "lucario", "midnight", "oceanic-next", "panda-syntax",
-    "tomorrow-night-eighties", "twilight", "zenburn"
+    "dracula", "darcula", "material", "monokai", "nord", "solarized", "icecoder",
+    "3024-day", "3024-night", "abbott", "abcdef", "ambiance",
+    "ayu-dark", "ayu-mirage", "base16-dark", "base16-light", "bespin",
+    "blackboard", "cobalt", "colorforth", "duotone-dark", "duotone-light",
+    "eclipse", "elegant", "erlang-dark", "gruvbox-dark", "hopscotch",
+    "idea", "isotope", "juejin", "lesser-dark", "liquibyte",
+    "lucario", "material-darker", "material-ocean", "material-palenight", "mbo",
+    "mdn-like", "midnight", "moxer", "neat", "neo",
+    "night", "oceanic-next", "panda-syntax", "paraiso-dark", "paraiso-light",
+    "pastel-on-dark", "railscasts", "rubyblue", "seti", "shadowfox",
+    "ssms", "the-matrix", "tomorrow-night-bright", "tomorrow-night-eighties", "ttcn",
+    "twilight", "vibrant-ink", "xq-dark", "xq-light", "yeti",
+    "yonce", "zenburn"
 ];
 
 let savedCodeBlockRange = null;
@@ -110,15 +118,11 @@ function getLanguageMeta(mode, label) {
     return { name: label || mode, mode: mode, icon: 'solar:code-square-linear', color: '#8b949e' };
 }
 
-// Auto Detect Programming Language from Code Snippet
-function detectCodeLanguage(code) {
-    if (!code || typeof code !== 'string') {
-        return getLanguageMeta('javascript', 'JavaScript');
-    }
+// Auto Detect Specific Programming Language from Code Snippet (returns null if not recognized)
+function detectSpecificCodeLanguage(code) {
+    if (!code || typeof code !== 'string') return null;
     const text = code.trim();
-    if (!text) {
-        return getLanguageMeta('javascript', 'JavaScript');
-    }
+    if (!text) return null;
 
     // 1. JSON (Valid object or array parse)
     if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
@@ -141,8 +145,9 @@ function detectCodeLanguage(code) {
     }
 
     // 4. SQL
-    if (/\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING)\b/i.test(text) && 
-        /\b(FROM|TABLE|INTO|SET|VALUES|DATABASE)\b/i.test(text)) {
+    if ((/\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING)\b/i.test(text) && 
+        /\b(FROM|TABLE|INTO|SET|VALUES|DATABASE)\b/i.test(text)) ||
+        /^\s*--[^\n]*\n.*?\b(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\b/is.test(text)) {
         return getLanguageMeta('sql', 'SQL');
     }
 
@@ -215,8 +220,33 @@ function detectCodeLanguage(code) {
         return getLanguageMeta('javascript', 'JavaScript');
     }
 
+    return null;
+}
+
+// Check if raw text looks like a code snippet that should be a code block
+function isCodeSnippet(code) {
+    if (!code || typeof code !== 'string') return false;
+    const text = code.trim();
+    if (!text) return false;
+    const specific = detectSpecificCodeLanguage(text);
+    if (!specific) return false;
+    // Don't classify pure Markdown documents as code blocks
+    if (specific.name === 'Markdown') return false;
+    // If it has newlines or clear code syntax starters
+    if (text.includes('\n')) return true;
+    return /^(SELECT\b|INSERT\b|UPDATE\b|DELETE\b|CREATE\b|const\b|let\b|var\b|def\b|import\b|fn\b|package\b|public\s+class\b)/i.test(text);
+}
+
+// Auto Detect Programming Language from Code Snippet
+function detectCodeLanguage(code) {
+    const specific = detectSpecificCodeLanguage(code);
+    if (specific) return specific;
     return getLanguageMeta('javascript', 'JavaScript');
 }
+
+window.detectSpecificCodeLanguage = detectSpecificCodeLanguage;
+window.isCodeSnippet = isCodeSnippet;
+window.detectCodeLanguage = detectCodeLanguage;
 
 // Insert Code Block from Active Selection or Caret
 function insertCodeBlockFromSelection() {
@@ -295,49 +325,43 @@ function insertCodeBlockFromSelection() {
     wrapper.appendChild(header);
     wrapper.appendChild(textarea);
 
-    if (range && content.contains(range.startContainer)) {
-        let topNode = range.startContainer;
-        while (topNode && topNode.parentElement !== content) {
-            topNode = topNode.parentElement;
-        }
+    const applyInsert = () => {
+        if (range && content.contains(range.startContainer)) {
+            let topNode = range.startContainer;
+            while (topNode && topNode.parentElement !== content) {
+                topNode = topNode.parentElement;
+            }
 
-        if (!range.collapsed) {
-            range.deleteContents();
-        }
+            if (!range.collapsed) {
+                range.deleteContents();
+            }
 
-        if (topNode && topNode.parentElement === content) {
-            const isEmptyText = !topNode.textContent || topNode.textContent.trim() === '';
-            const isJustBr = topNode.children.length === 1 && topNode.firstElementChild && topNode.firstElementChild.tagName === 'BR';
-            if ((isEmptyText || isJustBr) && !topNode.classList.contains('code-block-wrapper') && !topNode.classList.contains('media-container')) {
-                topNode.replaceWith(wrapper);
-            } else if (topNode.nextSibling) {
-                content.insertBefore(wrapper, topNode.nextSibling);
+            if (topNode && topNode.parentElement === content) {
+                const isEmptyText = !topNode.textContent || topNode.textContent.trim() === '';
+                const isJustBr = topNode.children.length === 1 && topNode.firstElementChild && topNode.firstElementChild.tagName === 'BR';
+                if ((isEmptyText || isJustBr) && !topNode.classList.contains('code-block-wrapper') && !topNode.classList.contains('media-container')) {
+                    topNode.replaceWith(wrapper);
+                } else if (topNode.nextSibling) {
+                    content.insertBefore(wrapper, topNode.nextSibling);
+                } else {
+                    content.appendChild(wrapper);
+                }
             } else {
                 content.appendChild(wrapper);
             }
         } else {
             content.appendChild(wrapper);
         }
-    } else {
-        content.appendChild(wrapper);
-    }
 
-    if (!wrapper.nextSibling) {
-        const nextLine = document.createElement('p');
-        nextLine.innerHTML = '<br>';
-        content.appendChild(nextLine);
-    }
+        if (!wrapper.nextSibling) {
+            const nextLine = document.createElement('p');
+            nextLine.innerHTML = '<br>';
+            content.appendChild(nextLine);
+        }
 
-    savedCodeBlockRange = null;
+        savedCodeBlockRange = null;
+        processCodeBlock();
 
-    processCodeBlock();
-
-    hasUnsavedChanges = true;
-    if (unsavedDot) unsavedDot.classList.add('active');
-    if (typeof triggerAutoSave === 'function') triggerAutoSave();
-    if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
-
-    setTimeout(() => {
         const cmEl = wrapper.querySelector('.CodeMirror');
         if (cmEl && cmEl.CodeMirror) {
             cmEl.CodeMirror.focus();
@@ -345,7 +369,15 @@ function insertCodeBlockFromSelection() {
                 cmEl.CodeMirror.setCursor(cmEl.CodeMirror.lineCount(), 0);
             }
         }
-    }, 60);
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyInsert);
+    else applyInsert();
+
+    hasUnsavedChanges = true;
+    if (unsavedDot) unsavedDot.classList.add('active');
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
+    if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
 
     if (selectedText.trim()) {
         showToast(`Code block created (${label})`, 'success');
@@ -356,6 +388,24 @@ function insertCodeBlockFromSelection() {
 // Build a detached code block element (header + textarea) without inserting it.
 // Shared by the editor's "insert code block" flow and Quick Capture.
 function buildCodeBlockElement(mode, label = null, initialContent = '') {
+    // Safety guard: detect if arguments were passed as (code, [langOrLabel])
+    if (!initialContent && mode && (mode.includes('\n') || mode.length > 50)) {
+        initialContent = mode;
+        const candidateLang = (label && label.length < 50 && !label.includes('\n')) ? label : null;
+        const detected = typeof detectCodeLanguage === 'function' ? detectCodeLanguage(initialContent) : null;
+        if (candidateLang) {
+            const meta = getLanguageMeta(candidateLang, candidateLang);
+            mode = meta.mode;
+            label = meta.name;
+        } else if (detected) {
+            mode = detected.mode;
+            label = detected.name;
+        } else {
+            mode = 'javascript';
+            label = 'JavaScript';
+        }
+    }
+
     const langMeta = getLanguageMeta(mode, label);
     const displayLabel = label || langMeta.name || mode.replace('text/x-', '').replace('src', '');
     const wrapper = document.createElement('div');
@@ -418,50 +468,53 @@ function createCodeBlock(mode, label = null, initialContent = '') {
 
     const wrapper = buildCodeBlockElement(mode, label, initialContent);
 
-    // Insert at caret if user was editing inside #content
-    if (savedCodeBlockRange && content && content.contains(savedCodeBlockRange.startContainer)) {
-        let node = savedCodeBlockRange.startContainer;
-        while (node && node.parentElement !== content) {
-            node = node.parentElement;
-        }
-        if (node && node.parentElement === content) {
-            if (node.nextSibling) {
-                content.insertBefore(wrapper, node.nextSibling);
+    const applyCreate = () => {
+        // Insert at caret if user was editing inside #content
+        if (savedCodeBlockRange && content && content.contains(savedCodeBlockRange.startContainer)) {
+            let node = savedCodeBlockRange.startContainer;
+            while (node && node.parentElement !== content) {
+                node = node.parentElement;
+            }
+            if (node && node.parentElement === content) {
+                if (node.nextSibling) {
+                    content.insertBefore(wrapper, node.nextSibling);
+                } else {
+                    content.appendChild(wrapper);
+                    const nextLine = document.createElement('p');
+                    nextLine.innerHTML = '<br>';
+                    content.appendChild(nextLine);
+                }
             } else {
-                content.appendChild(wrapper);
-                const nextLine = document.createElement('p');
-                nextLine.innerHTML = '<br>';
-                content.appendChild(nextLine);
+                savedCodeBlockRange.collapse(false);
+                savedCodeBlockRange.insertNode(wrapper);
+                if (!wrapper.nextSibling) {
+                    const nextLine = document.createElement('p');
+                    nextLine.innerHTML = '<br>';
+                    content.appendChild(nextLine);
+                }
             }
         } else {
-            savedCodeBlockRange.collapse(false);
-            savedCodeBlockRange.insertNode(wrapper);
-            if (!wrapper.nextSibling) {
-                const nextLine = document.createElement('p');
-                nextLine.innerHTML = '<br>';
-                content.appendChild(nextLine);
-            }
+            content.appendChild(wrapper);
+            const nextLine = document.createElement('p');
+            nextLine.innerHTML = '<br>';
+            content.appendChild(nextLine);
         }
-    } else {
-        content.appendChild(wrapper);
-        const nextLine = document.createElement('p');
-        nextLine.innerHTML = '<br>';
-        content.appendChild(nextLine);
-    }
-    savedCodeBlockRange = null;
+        savedCodeBlockRange = null;
 
-    processCodeBlock();
+        processCodeBlock();
 
-    hasUnsavedChanges = true;
-    if (unsavedDot) unsavedDot.classList.add('active');
-
-    // Focus the new CodeMirror block
-    setTimeout(() => {
         const cmEl = wrapper.querySelector('.CodeMirror');
         if (cmEl && cmEl.CodeMirror) {
             cmEl.CodeMirror.focus();
         }
-    }, 60);
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyCreate);
+    else applyCreate();
+
+    hasUnsavedChanges = true;
+    if (unsavedDot) unsavedDot.classList.add('active');
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
 
 // Copy Code Snippet
@@ -507,24 +560,86 @@ function toggleCodeWrap(btn) {
 function deleteCodeBlock(btn) {
     const wrapper = btn.closest('.code-block-wrapper');
     if (wrapper) {
-        wrapper.remove();
+        const applyDelete = () => {
+            const focusTarget = wrapper.nextElementSibling || wrapper.previousElementSibling;
+            wrapper.remove();
+            if (focusTarget && typeof placeCaretInElement === 'function') {
+                placeCaretInElement(focusTarget, true);
+            } else if (content) {
+                content.focus();
+            }
+        };
+        if (window.NoshUndo) window.NoshUndo.runWithUndo(applyDelete);
+        else applyDelete();
         hasUnsavedChanges = true;
         if (unsavedDot) unsavedDot.classList.add('active');
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
+        if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
         showToast('Code block removed', 'info');
     }
 }
 
+const themeStylePromises = new Map();
+
+function refreshAllCodeMirrors() {
+    document.querySelectorAll('.code-block-wrapper .CodeMirror, #settings-theme-preview .CodeMirror').forEach(cmEl => {
+        if (cmEl && cmEl.CodeMirror) {
+            cmEl.CodeMirror.refresh();
+        }
+    });
+}
+
 // Dynamic Theme Loader for all 65 CodeMirror themes
 function ensureThemeLoaded(themeName) {
-    if (!themeName) return;
-    const existing = document.querySelector(`link[data-code-theme="${themeName}"]`);
-    if (!existing) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = `src/code-theme/${themeName}.css`;
-        link.setAttribute('data-code-theme', themeName);
+    if (!themeName) return Promise.resolve();
+    const existing = document.querySelector(`link[data-code-theme="${themeName}"], link[href$="/${themeName}.css"]`);
+    if (existing) {
+        if (!existing.hasAttribute('data-code-theme')) {
+            existing.setAttribute('data-code-theme', themeName);
+        }
+        if (existing.sheet) {
+            return Promise.resolve();
+        }
+        if (themeStylePromises.has(themeName)) {
+            return themeStylePromises.get(themeName);
+        }
+        const pending = new Promise((resolve) => {
+            const done = () => resolve();
+            existing.addEventListener('load', done, { once: true });
+            existing.addEventListener('error', done, { once: true });
+            setTimeout(done, 250);
+        });
+        themeStylePromises.set(themeName, pending);
+        return pending;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `src/code-theme/${themeName}.css`;
+    link.setAttribute('data-code-theme', themeName);
+
+    const loadPromise = new Promise((resolve) => {
+        let settled = false;
+        const finish = (shouldRefresh) => {
+            if (settled) return;
+            settled = true;
+            if (shouldRefresh) refreshAllCodeMirrors();
+            resolve();
+        };
+        link.addEventListener('load', () => finish(true), { once: true });
+        link.addEventListener('error', () => finish(false), { once: true });
+        setTimeout(() => finish(false), 250);
+    });
+    themeStylePromises.set(themeName, loadPromise);
+
+    // Insert before dark.css so dynamic themes share the same cascade order as preloaded themes
+    const darkCssLink = document.querySelector('link[href="dark.css"]');
+    if (darkCssLink && darkCssLink.parentNode) {
+        darkCssLink.parentNode.insertBefore(link, darkCssLink);
+    } else {
         document.head.appendChild(link);
     }
+    return loadPromise;
 }
 
 // Convert legacy Nosh code blocks (.code-block-layer) to modern .code-block-wrapper
@@ -727,10 +842,11 @@ function processCodeBlock() {
     if (!content) return;
     upgradeLegacyCodeBlocks();
 
-    const activeTheme = localStorage.getItem('code-theme') || 'dracula';
+    const activeTheme = localStorage.getItem('code-theme') || 'solarized';
     ensureThemeLoaded(activeTheme);
 
     const wrappers = document.querySelectorAll('.code-block-wrapper');
+    let createdAny = false;
 
     wrappers.forEach(wrapper => {
         // Skip settings preview which handles its own initialization
@@ -767,9 +883,28 @@ function processCodeBlock() {
         // Clean any dead static CodeMirror DOM nodes from innerHTML restore
         wrapper.querySelectorAll('.CodeMirror').forEach(el => el.remove());
 
-        const mode = textarea.getAttribute('language') || 'javascript';
+        let mode = textarea.getAttribute('language') || 'javascript';
+        let codeVal = textarea.value || textarea.textContent || '';
+
+        // Auto-heal legacy or corrupted textareas where code was accidentally stored in language attribute
+        if (!codeVal.trim() && mode && (mode.includes('\n') || mode.length > 50)) {
+            codeVal = mode;
+            const detected = typeof detectCodeLanguage === 'function' ? detectCodeLanguage(codeVal) : null;
+            mode = detected ? detected.mode : 'javascript';
+            const displayLabel = detected ? detected.name : 'JavaScript';
+            textarea.setAttribute('language', mode);
+            textarea.setAttribute('data-label', displayLabel);
+            textarea.value = codeVal;
+            textarea.textContent = codeVal;
+            const langNameEl = wrapper.querySelector('.lang-name');
+            if (langNameEl) langNameEl.textContent = displayLabel;
+            const langIconEl = wrapper.querySelector('.lang-icon');
+            if (langIconEl && detected) langIconEl.setAttribute('icon', detected.icon);
+        }
+
         textarea.style.display = 'block';
 
+        const undoExtraKeys = window.NoshUndo ? window.NoshUndo.getCodeMirrorExtraKeys() : {};
         const cm = CodeMirror.fromTextArea(textarea, {
             lineNumbers: true,
             mode: mode,
@@ -781,42 +916,60 @@ function processCodeBlock() {
             matchBrackets: true,
             fixedGutter: true,
             keyMap: 'sublime',
-            extraKeys: {
+            extraKeys: Object.assign({
                 'Shift-Enter': function(editorInstance) {
+                    if (window.NoshUndo) window.NoshUndo.flushPendingTyping();
                     const editorContainer = wrapper.closest('#content') || document.getElementById('content');
                     if (!editorContainer) return;
-                    let emptyLine = wrapper.nextElementSibling;
-                    if (!emptyLine || emptyLine.tagName !== 'P' || emptyLine.innerHTML.trim() !== '<br>') {
-                        emptyLine = document.createElement('p');
-                        emptyLine.innerHTML = '<br>';
-                        if (wrapper.nextSibling) {
-                            editorContainer.insertBefore(emptyLine, wrapper.nextSibling);
-                        } else {
-                            editorContainer.appendChild(emptyLine);
+                    const applyExit = () => {
+                        let emptyLine = wrapper.nextElementSibling;
+                        if (!emptyLine || emptyLine.tagName !== 'P' || emptyLine.innerHTML.trim() !== '<br>') {
+                            emptyLine = document.createElement('p');
+                            emptyLine.innerHTML = '<br>';
+                            if (wrapper.nextSibling) {
+                                editorContainer.insertBefore(emptyLine, wrapper.nextSibling);
+                            } else {
+                                editorContainer.appendChild(emptyLine);
+                            }
                         }
-                    }
-                    const range = document.createRange();
-                    const sel = window.getSelection();
-                    range.setStart(emptyLine, 0);
-                    range.collapse(true);
-                    sel.removeAllRanges();
-                    sel.addRange(range);
-                    emptyLine.focus();
+                        const range = document.createRange();
+                        const sel = window.getSelection();
+                        range.setStart(emptyLine, 0);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        emptyLine.focus();
+                    };
+                    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyExit);
+                    else applyExit();
                 }
-            }
+            }, undoExtraKeys)
         });
 
         cm.setSize('100%', 'auto');
+        createdAny = true;
+        if (window.NoshUndo) {
+            window.NoshUndo.onCodeMirrorCreated(cm, wrapper);
+        }
 
-        cm.on('change', () => {
+        cm.on('change', (cmInstance, changeObj) => {
             const currentVal = cm.getValue();
             textarea.value = currentVal;
             textarea.textContent = currentVal;
+
+            if (window.NoshUndo && window.NoshUndo.isApplying()) {
+                return;
+            }
+
+            if (window.NoshUndo) {
+                window.NoshUndo.handleCodeMirrorChange(cmInstance, wrapper, changeObj);
+            }
 
             // Real-time automatic language detection (until user manually picks a language)
             if (wrapper.getAttribute('data-manual-lang') !== 'true') {
                 clearTimeout(wrapper._autoDetectTimer);
                 wrapper._autoDetectTimer = setTimeout(() => {
+                    if (!wrapper.isConnected || (window.NoshUndo && window.NoshUndo.isApplying())) return;
                     const code = cm.getValue().trim();
                     if (code.length >= 4) {
                         const detected = detectCodeLanguage(code);
@@ -834,6 +987,9 @@ function processCodeBlock() {
                                     <iconify-icon class="lang-caret" icon="solar:alt-arrow-down-linear"></iconify-icon>
                                 `;
                             }
+                            if (window.NoshUndo) {
+                                window.NoshUndo.syncSilentState();
+                            }
                         }
                     }
                 }, 300);
@@ -847,50 +1003,247 @@ function processCodeBlock() {
             }
         });
     });
+
+    if (createdAny && typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(refreshAllCodeMirrors);
+    }
 }
 
-// Code Themes in Settings
-function renderSettingsThemes() {
-    const grid = document.getElementById('themes-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
+// Code Themes in Settings (Carousel + Searchable Dropdown)
+let settingsPreviewCm = null;
+let settingsThemeSelectionId = 0;
+let settingsThemeListenersAttached = false;
 
-    const currentTheme = localStorage.getItem('code-theme') || 'dracula';
+function getCurrentCodeTheme() {
+    return localStorage.getItem('code-theme') || 'solarized';
+}
+
+function updateSettingsThemeHeaderUI(theme) {
+    const idx = codeBlockThemes.indexOf(theme);
+    const total = codeBlockThemes.length;
+    const currentNameEl = document.getElementById('theme-current-name');
+    const indexBadgeEl = document.getElementById('theme-index-badge');
+
+    if (currentNameEl) currentNameEl.textContent = theme;
+    if (indexBadgeEl) {
+        indexBadgeEl.textContent = idx >= 0 ? `${idx + 1} / ${total}` : `${total}`;
+    }
+
+    document.querySelectorAll('#theme-dropdown-list .theme-dropdown-item').forEach(btn => {
+        const isSelected = btn.dataset.theme === theme;
+        btn.classList.toggle('selected', isSelected);
+        btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    });
+}
+
+function closeThemePickerDropdown(restoreFocus = false) {
+    const wrap = document.getElementById('theme-picker-wrap');
+    const dropdown = document.getElementById('theme-picker-dropdown');
+    const trigger = document.getElementById('theme-picker-trigger');
+    const wasOpen = Boolean(dropdown && dropdown.classList.contains('open'));
+
+    if (wrap) wrap.classList.remove('open');
+    if (dropdown) dropdown.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+
+    if (restoreFocus && wasOpen && trigger) {
+        trigger.focus();
+    }
+}
+
+function openThemePickerDropdown() {
+    const wrap = document.getElementById('theme-picker-wrap');
+    const dropdown = document.getElementById('theme-picker-dropdown');
+    const trigger = document.getElementById('theme-picker-trigger');
+    const searchInput = document.getElementById('theme-search-input');
+    const list = document.getElementById('theme-dropdown-list');
+    if (!dropdown || !trigger) return;
+
+    if (wrap) wrap.classList.add('open');
+    dropdown.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+
+    if (searchInput) {
+        searchInput.value = '';
+        filterSettingsThemes('');
+        setTimeout(() => searchInput.focus(), 20);
+    }
+
+    if (list) {
+        const selected = list.querySelector('.theme-dropdown-item.selected');
+        if (selected && typeof selected.scrollIntoView === 'function') {
+            selected.scrollIntoView({ block: 'nearest' });
+        }
+    }
+}
+
+function toggleThemePickerDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('theme-picker-dropdown');
+    if (!dropdown) return;
+    if (dropdown.classList.contains('open')) {
+        closeThemePickerDropdown(false);
+    } else {
+        openThemePickerDropdown();
+    }
+}
+
+async function applySettingsCodeTheme(theme) {
+    if (!theme) return;
+    const reqId = ++settingsThemeSelectionId;
+    localStorage.setItem('code-theme', theme);
+    updateSettingsThemeHeaderUI(theme);
+
+    await ensureThemeLoaded(theme);
+    if (reqId !== settingsThemeSelectionId) return;
+
+    processCodeBlock();
+    await updateSettingsThemePreview(theme);
+}
+
+function stepSettingsTheme(delta) {
+    if (!codeBlockThemes.length) return;
+    closeThemePickerDropdown(false);
+    const currentIdx = codeBlockThemes.indexOf(getCurrentCodeTheme());
+    const baseIdx = currentIdx >= 0 ? currentIdx : 0;
+    const nextIdx = (baseIdx + delta + codeBlockThemes.length) % codeBlockThemes.length;
+    applySettingsCodeTheme(codeBlockThemes[nextIdx]);
+}
+
+function initSettingsThemeListeners() {
+    if (settingsThemeListenersAttached) return;
+    settingsThemeListenersAttached = true;
+
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('theme-picker-dropdown');
+        if (!dropdown || !dropdown.classList.contains('open')) return;
+        if (!e.target.closest('#theme-picker-wrap')) {
+            closeThemePickerDropdown(false);
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        const settingsModal = document.getElementById('settings-modal');
+        const codePane = document.getElementById('pane-code-themes');
+        if (!settingsModal || !settingsModal.classList.contains('active')) return;
+        if (!codePane || !codePane.classList.contains('active')) return;
+
+        const dropdown = document.getElementById('theme-picker-dropdown');
+        if (dropdown && dropdown.classList.contains('open')) {
+            if (e.key === 'Enter' && e.target && e.target.id === 'theme-search-input') {
+                const firstMatch = Array.from(document.querySelectorAll('#theme-dropdown-list .theme-dropdown-item'))
+                    .find(btn => btn.style.display !== 'none');
+                if (firstMatch) {
+                    e.preventDefault();
+                    applySettingsCodeTheme(firstMatch.dataset.theme);
+                    closeThemePickerDropdown(true);
+                }
+            }
+            return;
+        }
+
+        if (e.target && (e.target.matches('input, textarea, select') || e.target.isContentEditable)) {
+            return;
+        }
+
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            stepSettingsTheme(-1);
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            stepSettingsTheme(1);
+        }
+    });
+}
+
+function renderSettingsThemes() {
+    initSettingsThemeListeners();
+    const list = document.getElementById('theme-dropdown-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const currentTheme = getCurrentCodeTheme();
 
     codeBlockThemes.forEach(theme => {
         const btn = document.createElement('button');
-        btn.className = `theme-option-btn ${theme === currentTheme ? 'selected' : ''}`;
-        btn.textContent = theme;
+        btn.type = 'button';
+        btn.className = `theme-dropdown-item ${theme === currentTheme ? 'selected' : ''}`;
+        btn.dataset.theme = theme;
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', theme === currentTheme ? 'true' : 'false');
+
+        const label = document.createElement('span');
+        label.className = 'theme-item-name';
+        label.textContent = theme;
+
+        const checkIcon = document.createElement('iconify-icon');
+        checkIcon.className = 'theme-item-check';
+        checkIcon.setAttribute('icon', 'solar:check-circle-bold');
+
+        btn.appendChild(label);
+        btn.appendChild(checkIcon);
         btn.onclick = () => {
-            localStorage.setItem('code-theme', theme);
-            ensureThemeLoaded(theme);
-            document.querySelectorAll('.theme-option-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            processCodeBlock();
-            updateSettingsThemePreview();
+            applySettingsCodeTheme(theme);
+            closeThemePickerDropdown(true);
         };
-        grid.appendChild(btn);
+        list.appendChild(btn);
     });
 
+    const empty = document.createElement('div');
+    empty.id = 'theme-dropdown-empty';
+    empty.className = 'theme-dropdown-empty';
+    empty.style.display = 'none';
+    empty.textContent = 'No matching themes found';
+    list.appendChild(empty);
+
+    closeThemePickerDropdown(false);
+    updateSettingsThemeHeaderUI(currentTheme);
     ensureThemeLoaded(currentTheme);
-    updateSettingsThemePreview();
+    updateSettingsThemePreview(currentTheme);
 }
 
 function filterSettingsThemes(filter) {
-    const q = (filter || '').toLowerCase();
-    document.querySelectorAll('#themes-grid .theme-option-btn').forEach(btn => {
-        const txt = btn.textContent.toLowerCase();
-        btn.style.display = txt.includes(q) ? 'flex' : 'none';
+    const q = (filter || '').toLowerCase().trim();
+    let visibleCount = 0;
+    document.querySelectorAll('#theme-dropdown-list .theme-dropdown-item').forEach(btn => {
+        const txt = (btn.dataset.theme || btn.textContent || '').toLowerCase();
+        const matches = !q || txt.includes(q);
+        btn.style.display = matches ? 'flex' : 'none';
+        if (matches) visibleCount++;
     });
+
+    const emptyEl = document.getElementById('theme-dropdown-empty');
+    if (emptyEl) {
+        emptyEl.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
 }
 
-function updateSettingsThemePreview() {
+async function updateSettingsThemePreview(explicitTheme) {
     const previewContainer = document.getElementById('settings-theme-preview');
     if (!previewContainer) return;
+
+    const theme = explicitTheme || getCurrentCodeTheme();
+    await ensureThemeLoaded(theme);
+    if (explicitTheme && getCurrentCodeTheme() !== theme) return;
+
+    const existingCmEl = previewContainer.querySelector('.CodeMirror');
+    if (settingsPreviewCm && existingCmEl && existingCmEl.CodeMirror === settingsPreviewCm) {
+        if (settingsPreviewCm.getOption('theme') !== theme) {
+            settingsPreviewCm.setOption('theme', theme);
+        }
+        const badge = previewContainer.querySelector('.theme-pill-badge');
+        if (badge) badge.textContent = theme;
+        settingsPreviewCm.refresh();
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => {
+                if (settingsPreviewCm) settingsPreviewCm.refresh();
+            });
+        }
+        return;
+    }
+
     previewContainer.innerHTML = '';
 
-    const theme = localStorage.getItem('code-theme') || 'dracula';
-    ensureThemeLoaded(theme);
     const header = document.createElement('div');
     header.className = 'code-block-header';
     header.innerHTML = `
@@ -906,9 +1259,11 @@ function updateSettingsThemePreview() {
             </span>
         </div>
         <div class="code-block-actions">
-            <span class="theme-pill-badge">${theme}</span>
+            <span class="theme-pill-badge"></span>
         </div>
     `;
+    const badge = header.querySelector('.theme-pill-badge');
+    if (badge) badge.textContent = theme;
 
     const ta = document.createElement('textarea');
     ta.value = `# Fast Fibonacci Generator with Memoization\ndef fibonacci(n: int, memo: dict = {}) -> int:\n    if n in memo:\n        return memo[n]\n    if n <= 1:\n        return n\n    memo[n] = fibonacci(n - 1, memo) + fibonacci(n - 2, memo)\n    return memo[n]\n\n# Calculate first 10 numbers\nprint([fibonacci(i) for i in range(10)])`;
@@ -916,15 +1271,17 @@ function updateSettingsThemePreview() {
     previewContainer.appendChild(header);
     previewContainer.appendChild(ta);
 
-    const cm = CodeMirror.fromTextArea(ta, {
+    settingsPreviewCm = CodeMirror.fromTextArea(ta, {
         lineNumbers: true,
         mode: 'python',
         theme: theme,
         readOnly: true,
         tabSize: 4
     });
-    cm.setSize('100%', '100%');
-    setTimeout(() => cm.refresh(), 50);
+    settingsPreviewCm.setSize('100%', '100%');
+    setTimeout(() => {
+        if (settingsPreviewCm) settingsPreviewCm.refresh();
+    }, 50);
 }
 
 // In-Block Live Language Switcher
@@ -1004,53 +1361,64 @@ function renderBlockLangItems(filter = '') {
 function autoDetectCurrentBlockLanguage() {
     if (!currentSwitchingWrapper) return;
     const wrapper = currentSwitchingWrapper;
-    wrapper.removeAttribute('data-manual-lang');
+    const applyAuto = () => {
+        wrapper.removeAttribute('data-manual-lang');
 
-    let codeText = '';
-    const cmEl = wrapper.querySelector('.CodeMirror');
-    if (cmEl && cmEl.CodeMirror) {
-        codeText = cmEl.CodeMirror.getValue();
-    } else {
-        const ta = wrapper.querySelector('textarea.code');
-        if (ta) codeText = ta.value || ta.textContent;
-    }
+        let codeText = '';
+        const cmEl = wrapper.querySelector('.CodeMirror');
+        if (cmEl && cmEl.CodeMirror) {
+            codeText = cmEl.CodeMirror.getValue();
+        } else {
+            const ta = wrapper.querySelector('textarea.code');
+            if (ta) codeText = ta.value || ta.textContent;
+        }
 
-    const detected = detectCodeLanguage(codeText);
-    switchBlockLanguage(detected.mode, detected.name, detected.icon, false);
-    showToast(`Auto-detected: ${detected.name}`, 'info');
+        const detected = detectCodeLanguage(codeText);
+        switchBlockLanguage(detected.mode, detected.name, detected.icon, false);
+        showToast(`Auto-detected: ${detected.name}`, 'info');
+    };
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyAuto);
+    else applyAuto();
 }
 
 function switchBlockLanguage(mode, label, icon, isManualChoice = true) {
     if (!currentSwitchingWrapper) return;
     const wrapper = currentSwitchingWrapper;
-    const textarea = wrapper.querySelector('textarea.code');
-    const tag = wrapper.querySelector('.code-lang-tag');
-    const cmEl = wrapper.querySelector('.CodeMirror');
+    const applySwitch = () => {
+        const textarea = wrapper.querySelector('textarea.code');
+        const tag = wrapper.querySelector('.code-lang-tag');
+        const cmEl = wrapper.querySelector('.CodeMirror');
 
-    if (isManualChoice) {
-        wrapper.setAttribute('data-manual-lang', 'true');
-    }
+        if (isManualChoice) {
+            wrapper.setAttribute('data-manual-lang', 'true');
+        }
 
-    if (textarea) {
-        textarea.setAttribute('language', mode);
-        textarea.setAttribute('data-label', label);
-    }
+        if (textarea) {
+            textarea.setAttribute('language', mode);
+            textarea.setAttribute('data-label', label);
+        }
 
-    if (tag) {
-        tag.innerHTML = `
+        if (tag) {
+            tag.innerHTML = `
             <iconify-icon class="lang-icon" icon="${icon}"></iconify-icon>
             <span class="lang-name">${label}</span>
             <iconify-icon class="lang-caret" icon="solar:alt-arrow-down-linear"></iconify-icon>
         `;
-    }
+        }
 
-    if (cmEl && cmEl.CodeMirror) {
-        cmEl.CodeMirror.setOption('mode', mode);
-    }
+        if (cmEl && cmEl.CodeMirror) {
+            cmEl.CodeMirror.setOption('mode', mode);
+        }
 
-    closeBlockLangSwitcher();
+        closeBlockLangSwitcher();
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applySwitch);
+    else applySwitch();
+
     hasUnsavedChanges = true;
     if (unsavedDot) unsavedDot.classList.add('active');
+    if (typeof triggerAutoSave === 'function') triggerAutoSave();
     if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
     showToast(`Language switched to ${label}`, 'success');
 }
@@ -1067,9 +1435,17 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Initialize active theme on startup
+// Initialize active theme and preload monospace webfont on startup so first code block renders without FOUT
 try {
-    ensureThemeLoaded(localStorage.getItem('code-theme') || 'dracula');
+    ensureThemeLoaded(localStorage.getItem('code-theme') || 'solarized');
+    if (document.fonts && typeof document.fonts.load === 'function') {
+        document.fonts.load('400 13px "JetBrains Mono"').catch(() => {});
+        document.fonts.load('600 11px "JetBrains Mono"').catch(() => {});
+        if (typeof document.fonts.addEventListener === 'function') {
+            document.fonts.addEventListener('loadingdone', refreshAllCodeMirrors);
+        }
+        document.fonts.ready.then(refreshAllCodeMirrors).catch(() => {});
+    }
 } catch (e) {
     console.warn('Initial code theme load:', e);
 }
@@ -1222,7 +1598,11 @@ function moveBlockUp(btnOrEl) {
         return;
     }
 
-    content.insertBefore(block, prev);
+    const applyMove = () => {
+        content.insertBefore(block, prev);
+    };
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyMove);
+    else applyMove();
 
     const cmEl = block.querySelector('.CodeMirror');
     if (cmEl && cmEl.CodeMirror) {
@@ -1246,7 +1626,11 @@ function moveBlockDown(btnOrEl) {
         return;
     }
 
-    content.insertBefore(block, next.nextElementSibling);
+    const applyMove = () => {
+        content.insertBefore(block, next.nextElementSibling);
+    };
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyMove);
+    else applyMove();
 
     const cmEl = block.querySelector('.CodeMirror');
     if (cmEl && cmEl.CodeMirror) {
@@ -1366,26 +1750,32 @@ function initBlockDragAndDrop() {
         e.stopPropagation();
 
         const targetInfo = getDropTargetFromPoint(e.clientY);
+        const movedBlock = draggedBlock;
         if (targetInfo && targetInfo.element && targetInfo.element !== draggedBlock) {
+            const tx = window.NoshUndo ? window.NoshUndo.beginTransaction() : null;
             if (targetInfo.isUpper) {
                 content.insertBefore(draggedBlock, targetInfo.element);
             } else {
                 content.insertBefore(draggedBlock, targetInfo.element.nextElementSibling);
             }
 
-            const cmEl = draggedBlock.querySelector('.CodeMirror');
+            cleanupDragState();
+
+            if (tx) tx.commit();
+
+            const cmEl = movedBlock.querySelector('.CodeMirror');
             if (cmEl && cmEl.CodeMirror) {
                 cmEl.CodeMirror.refresh();
             }
 
-            highlightMovedBlock(draggedBlock);
+            highlightMovedBlock(movedBlock);
             hasUnsavedChanges = true;
             if (unsavedDot) unsavedDot.classList.add('active');
             if (typeof triggerAutoSave === 'function') triggerAutoSave();
             if (typeof updateStatusBarStats === 'function') updateStatusBarStats();
+        } else {
+            cleanupDragState();
         }
-
-        cleanupDragState();
     };
 
     content.addEventListener('drop', handleDrop);

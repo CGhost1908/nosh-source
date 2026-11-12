@@ -568,8 +568,10 @@
                         await fsPromises.writeFile(filePath, incomingHtml, 'utf8');
                         changedCount++;
                         if (typeof activeNoteName !== 'undefined' && activeNoteName === safeName && typeof content !== 'undefined') {
+                            const beforeSync = window.NoshUndo ? window.NoshUndo.peekCommittedState() : null;
                             content.innerHTML = incomingHtml;
                             if (typeof processCodeBlock === 'function') processCodeBlock();
+                            if (window.NoshUndo) window.NoshUndo.onExternalContentReplaced(safeName, beforeSync);
                         }
                     }
 

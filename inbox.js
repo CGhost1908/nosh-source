@@ -46,8 +46,12 @@ async function appendQuickCaptureToInbox(text, kind) {
 
     // Inbox is open in the editor: append live and save, so unsaved edits there aren't overwritten
     if (activeNoteName === QUICK_CAPTURE_NOTE && content) {
-        content.appendChild(entry);
-        processCodeBlock();
+        const appendLive = () => {
+            content.appendChild(entry);
+            processCodeBlock();
+        };
+        if (window.NoshUndo) window.NoshUndo.runWithUndo(appendLive);
+        else appendLive();
         hasUnsavedChanges = true;
         await saveFile();
         if (hasUnsavedChanges) {

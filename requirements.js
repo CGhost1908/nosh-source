@@ -84,5 +84,5 @@ const welcomeDashboard = `
 
 // Initialize default code theme if not set
 if (!localStorage.getItem('code-theme')) {
-    localStorage.setItem('code-theme', 'dracula');
+    localStorage.setItem('code-theme', 'solarized');
 }

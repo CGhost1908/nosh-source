@@ -598,6 +598,7 @@ body {
     line-height: 1.65 !important;
     height: auto !important;
     background: var(--bg-code) !important;
+    color: var(--text-primary) !important;
     padding: 4px 0 !important;
 }
 .CodeMirror-scroll {

@@ -525,6 +525,10 @@ async function restoreNoteSnapshot(noteName, id) {
         await snapshotNote(safeName, currentHtml, { force: true });
     }
 
+    if (window.NoshUndo) {
+        window.NoshUndo.prepareExternalRestore(safeName);
+    }
+
     await fsPromises.writeFile(filePath, snapshotHtml, 'utf8');
     hasUnsavedChanges = false;
     if (typeof unsavedDot !== 'undefined' && unsavedDot) unsavedDot.classList.remove('active');

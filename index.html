@@ -8,7 +8,7 @@
     <title>nosh</title>
     
     <!-- CodeMirror & Themes -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.css">
+    <link rel="stylesheet" href="node_modules/codemirror/lib/codemirror.css">
     <link rel="stylesheet" href="src/code-theme/darcula.css">
     <link rel="stylesheet" href="src/code-theme/dracula.css">
     <link rel="stylesheet" href="src/code-theme/material.css">
@@ -547,10 +547,10 @@
 
                     <!-- History & Search Group -->
                     <div class="toolbar-group">
-                        <button class="toolbar-btn" onclick="formatDoc('undo')" title="Undo (Ctrl+Z)">
+                        <button id="toolbar-undo-btn" class="toolbar-btn" onmousedown="event.preventDefault()" onclick="formatDoc('undo')" title="Undo (Ctrl+Z)">
                             <iconify-icon icon="solar:undo-left-linear"></iconify-icon>
                         </button>
-                        <button class="toolbar-btn" onclick="formatDoc('redo')" title="Redo (Ctrl+Y)">
+                        <button id="toolbar-redo-btn" class="toolbar-btn" onmousedown="event.preventDefault()" onclick="formatDoc('redo')" title="Redo (Ctrl+Y)">
                             <iconify-icon icon="solar:undo-right-linear"></iconify-icon>
                         </button>
                         <button class="toolbar-btn" onclick="openDocFindBar()" title="Find in Document (Ctrl+F)">
@@ -1492,26 +1492,55 @@
                     </div>
                 </div>
 
-                <!-- Code Themes Pane (Redesigned Split Layout) -->
+                <!-- Code Themes Pane (Carousel + Wide Live Preview) -->
                 <div class="settings-pane" id="pane-code-themes">
-                    <div class="settings-section-title">Syntax Highlighting Theme</div>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Choose the syntax theme applied to all embedded code snippets across your notes.</p>
-                    
-                    <div class="code-themes-layout">
-                        <div class="code-themes-picker-side">
-                            <div class="theme-search-box">
-                                <iconify-icon icon="solar:magnifer-linear"></iconify-icon>
-                                <input type="text" id="theme-search-input" placeholder="Search themes..." oninput="filterSettingsThemes(this.value)">
-                            </div>
-                            <div class="themes-grid" id="themes-grid">
-                                <!-- Populated dynamically via JS -->
+                    <div class="code-themes-header-block">
+                        <div>
+                            <div class="settings-section-title">Syntax Highlighting Theme</div>
+                            <p class="code-themes-subtitle">Choose the syntax theme applied to all embedded code snippets across your notes.</p>
+                        </div>
+                        <span class="theme-nav-hint">Use ← / → keys</span>
+                    </div>
+
+                    <div class="theme-carousel-bar">
+                        <button type="button" class="theme-nav-btn" id="theme-prev-btn" onclick="stepSettingsTheme(-1)" title="Previous theme (←)">
+                            <iconify-icon icon="solar:alt-arrow-left-linear"></iconify-icon>
+                            <span>Previous</span>
+                        </button>
+
+                        <div class="theme-picker-wrap" id="theme-picker-wrap">
+                            <button type="button" class="theme-picker-trigger" id="theme-picker-trigger" onclick="toggleThemePickerDropdown(event)" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="theme-picker-current">
+                                    <iconify-icon icon="solar:pallete-2-linear"></iconify-icon>
+                                    <span id="theme-current-name">solarized</span>
+                                </span>
+                                <span class="theme-picker-meta">
+                                    <span class="theme-index-badge" id="theme-index-badge">6 / 64</span>
+                                    <iconify-icon class="theme-picker-caret" icon="solar:alt-arrow-down-linear"></iconify-icon>
+                                </span>
+                            </button>
+
+                            <div class="theme-picker-dropdown" id="theme-picker-dropdown" role="listbox" aria-label="Code themes">
+                                <div class="theme-search-box">
+                                    <iconify-icon icon="solar:magnifer-linear"></iconify-icon>
+                                    <input type="text" id="theme-search-input" placeholder="Search 64 themes..." oninput="filterSettingsThemes(this.value)">
+                                </div>
+                                <div class="theme-dropdown-list" id="theme-dropdown-list">
+                                    <!-- Populated dynamically via JS -->
+                                </div>
                             </div>
                         </div>
-                        <div class="code-themes-preview-side">
-                            <div class="theme-preview-label">Theme Live Preview</div>
-                            <div id="settings-theme-preview" class="code-block-wrapper">
-                                <!-- Sample code mirror preview -->
-                            </div>
+
+                        <button type="button" class="theme-nav-btn" id="theme-next-btn" onclick="stepSettingsTheme(1)" title="Next theme (→)">
+                            <span>Next</span>
+                            <iconify-icon icon="solar:alt-arrow-right-linear"></iconify-icon>
+                        </button>
+                    </div>
+
+                    <div class="code-themes-preview-wide">
+                        <div class="theme-preview-label">Theme Live Preview</div>
+                        <div id="settings-theme-preview" class="code-block-wrapper">
+                            <!-- Sample code mirror preview -->
                         </div>
                     </div>
                 </div>
@@ -1937,6 +1966,7 @@
     <script src="node_modules/codemirror/mode/swift/swift.js"></script>
 
     <script src="requirements.js"></script>
+    <script src="undo.js"></script>
     <script src="visual.js"></script>
     <script src="drive.js"></script>
     <script src="folders.js"></script>

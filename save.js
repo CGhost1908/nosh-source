@@ -619,6 +619,9 @@ function initWelcomeDashboardInteractions(data) {
 
 // Show Welcome / Home Dashboard
 async function showWelcomeDashboard() {
+    if (window.NoshUndo) {
+        window.NoshUndo.onWelcomeDashboard();
+    }
     activeNoteName = null;
     hasUnsavedChanges = false;
     if (unsavedDot) unsavedDot.classList.remove('active');
@@ -663,6 +666,8 @@ async function showWelcomeDashboard() {
     }
 }
 
+let openNoteRequestSeq = 0;
+
 // Open Note File
 async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload = false) {
     if (!noteName) return;
@@ -686,6 +691,7 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload
     }
 
     const filePath = path.join(savesDir, `${safeName}.nsh`);
+    const requestSeq = ++openNoteRequestSeq;
 
     try {
         if (!fs.existsSync(filePath)) {
@@ -694,16 +700,35 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload
             return;
         }
 
-        // Show realistic document skeleton while note is loaded and parsed
+        if (window.NoshUndo) {
+            window.NoshUndo.onBeforeNoteSwitch();
+        }
+
+        // Show realistic document skeleton while note and active code theme finish loading
         if (typeof showDocumentSkeleton === 'function') {
             showDocumentSkeleton(safeName);
         }
 
-        const data = await fsPromises.readFile(filePath, 'utf8');
+        const activeCodeTheme = localStorage.getItem('code-theme') || 'solarized';
+        const themeReadyPromise = typeof ensureThemeLoaded === 'function'
+            ? ensureThemeLoaded(activeCodeTheme)
+            : Promise.resolve();
+
+        const [data] = await Promise.all([
+            fsPromises.readFile(filePath, 'utf8'),
+            themeReadyPromise
+        ]);
+
+        if (requestSeq !== openNoteRequestSeq) {
+            return;
+        }
 
         activeNoteName = safeName;
         hasUnsavedChanges = false;
         if (unsavedDot) unsavedDot.classList.remove('active');
+        if (window.NoshUndo) {
+            window.NoshUndo.onNoteOpened(safeName);
+        }
 
         content.innerHTML = data;
         content.setAttribute('contenteditable', 'true');
@@ -739,35 +764,41 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload
             updatePublishButtonState();
         }
 
-        // Process code blocks, checklists, media and internal links inside the note
-        setTimeout(() => {
+        // Hydrate code blocks, checklists, media, links, math and tables synchronously before first paint
+        if (typeof processCodeBlock === 'function') {
             processCodeBlock();
-            if (typeof processChecklists === 'function') {
-                processChecklists();
-            }
-            if (typeof processLoadedMedia === 'function') {
-                processLoadedMedia();
-            }
-            if (typeof processInternalLinks === 'function') {
-                processInternalLinks();
-            }
-            if (typeof processMathFormulas === 'function') {
-                processMathFormulas();
-            }
-            if (typeof processTables === 'function') {
-                processTables();
-            }
-            if (typeof updateStatusBarStats === 'function') {
-                updateStatusBarStats();
-            }
-            if (typeof updateBacklinksUI === 'function') {
-                updateBacklinksUI();
-            }
-            if (typeof populateDocumentOutline === 'function') {
-                populateDocumentOutline();
-            }
-        }, 30);
+        }
+        if (typeof processChecklists === 'function') {
+            processChecklists();
+        }
+        if (typeof processLoadedMedia === 'function') {
+            processLoadedMedia();
+        }
+        if (typeof processInternalLinks === 'function') {
+            processInternalLinks();
+        }
+        if (typeof processMathFormulas === 'function') {
+            processMathFormulas();
+        }
+        if (typeof processTables === 'function') {
+            processTables();
+        }
+        if (typeof updateStatusBarStats === 'function') {
+            updateStatusBarStats();
+        }
+        if (typeof updateBacklinksUI === 'function') {
+            updateBacklinksUI();
+        }
+        if (typeof populateDocumentOutline === 'function') {
+            populateDocumentOutline();
+        }
+        if (window.NoshUndo) {
+            window.NoshUndo.onNoteHydrated(safeName, { forceReload });
+        }
     } catch (err) {
+        if (window.NoshUndo) {
+            window.NoshUndo.onNoteHydrated(null);
+        }
         console.error('Error opening file:', err);
         showToast('Error opening note file', 'error');
     }
@@ -864,9 +895,16 @@ async function deleteSave(noteName, permanent = false) {
             deleteFileFromDriveByName(safeName);
         }
 
+        if (permanent && window.NoshUndo) {
+            window.NoshUndo.deleteNoteKey(safeName);
+        }
+
         if (activeNoteName === safeName) {
             activeNoteName = null;
             hasUnsavedChanges = false;
+            if (window.NoshUndo) {
+                window.NoshUndo.onWelcomeDashboard();
+            }
             if (typeof updatePublishButtonState === 'function') {
                 updatePublishButtonState();
             }
@@ -967,7 +1005,7 @@ async function jumpToInternalNote(e, targetNote) {
     }
 }
 
-function processInternalLinks(container = null) {
+function processInternalLinks(container = null, { bindingsOnly = false } = {}) {
     const root = container || content;
     if (!root) return;
 
@@ -978,6 +1016,8 @@ function processInternalLinks(container = null) {
             link.onclick = (e) => jumpToInternalNote(e, note);
         }
     });
+
+    if (bindingsOnly) return;
 
     // 2. Scan text nodes outside code blocks for [[Note Title]] and convert to interactive links
     const walker = document.createTreeWalker(
@@ -1068,20 +1108,25 @@ function attachMathFormulaInteractions(el) {
     el.ondblclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const latex = el.getAttribute('data-latex') || '';
-        const isDisplay = el.getAttribute('data-display-mode') !== 'false';
-        const editNode = document.createElement(isDisplay ? 'p' : 'span');
-        editNode.textContent = isDisplay ? `\\[ ${latex} \\]` : `\\( ${latex} \\)`;
-        el.replaceWith(editNode);
+        const applyEdit = () => {
+            const latex = el.getAttribute('data-latex') || '';
+            const isDisplay = el.getAttribute('data-display-mode') !== 'false';
+            const editNode = document.createElement(isDisplay ? 'p' : 'span');
+            editNode.textContent = isDisplay ? `\\[ ${latex} \\]` : `\\( ${latex} \\)`;
+            el.replaceWith(editNode);
 
-        // Place caret inside the raw LaTeX text for quick editing; re-render on blur
-        const sel = window.getSelection();
-        if (sel) {
-            const range = document.createRange();
-            range.selectNodeContents(editNode);
-            sel.removeAllRanges();
-            sel.addRange(range);
-        }
+            // Place caret inside the raw LaTeX text for quick editing; re-render on blur
+            const sel = window.getSelection();
+            if (sel) {
+                const range = document.createRange();
+                range.selectNodeContents(editNode);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        };
+        if (window.NoshUndo) window.NoshUndo.runWithUndo(applyEdit);
+        else applyEdit();
+        if (typeof triggerAutoSave === 'function') triggerAutoSave();
     };
 }
 
@@ -1100,7 +1145,7 @@ function isLikelyBracketLatex(innerLatex, isFullBlock = false) {
     return /\\[a-zA-Z]+/.test(s) || (/[=^_{}]/.test(s) && !/^[-+−–\d.,\s°C%a-zA-ZğüşöçıİĞÜŞÖÇ]+$/.test(s));
 }
 
-function processMathFormulas(container = null) {
+function processMathFormulas(container = null, { renderExistingOnly = false } = {}) {
     const root = container || content;
     if (!root) return;
 
@@ -1119,6 +1164,8 @@ function processMathFormulas(container = null) {
         }
         attachMathFormulaInteractions(el);
     });
+
+    if (renderExistingOnly) return;
 
     // 2. Multi-element block formulas spanning across consecutive child blocks (e.g. <p>\[</p><p>...</p><p>\]</p>)
     const children = Array.from(root.children);
@@ -1292,6 +1339,9 @@ if (typeof content !== 'undefined' && content) {
             if (typeof processTables === 'function') {
                 processTables();
             }
+            if (window.NoshUndo) {
+                window.NoshUndo.syncSilentState();
+            }
         }, 40);
     });
 }
@@ -1317,6 +1367,10 @@ async function renameSave(oldName, newName) {
 
     try {
         await fsPromises.rename(oldFilePath, newFilePath);
+
+        if (window.NoshUndo) {
+            window.NoshUndo.renameNoteKey(oldName, sanitizedNewName);
+        }
 
         if (typeof renameNoteHistory === 'function') {
             await renameNoteHistory(path.basename(oldName), sanitizedNewName);
@@ -1391,6 +1445,9 @@ async function renameSave(oldName, newName) {
                     ensureNoteFirstHeader(content, sanitizedNewName, true);
                 }
             }
+            if (window.NoshUndo) {
+                window.NoshUndo.syncSilentState();
+            }
         }
 
         if (typeof updatePublishButtonState === 'function') {
@@ -1451,6 +1508,10 @@ async function renameActiveNoteFromHeader(oldName, rawNewName, { allowUniqueSuff
 
         if (typeof renameNoteHistory === 'function') {
             await renameNoteHistory(oldBase, targetName);
+        }
+
+        if (window.NoshUndo) {
+            window.NoshUndo.renameNoteKey(oldName, targetName);
         }
 
         if (typeof removeNoteFromSearchCache === 'function') {

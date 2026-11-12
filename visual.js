@@ -24,6 +24,9 @@ function openModal(modalId) {
 }
 
 function closeAllModals() {
+    if (typeof closeThemePickerDropdown === 'function') {
+        closeThemePickerDropdown(false);
+    }
     if (globalOverlay) globalOverlay.classList.remove('active');
     document.querySelectorAll('.modal-container').forEach(modal => {
         modal.classList.remove('active');
@@ -46,6 +49,15 @@ window.closeModal = closeModal;
 // Escape key to close modals, dropdowns, context menu, outline, and exit zen mode
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+        const themeDropdown = document.getElementById('theme-picker-dropdown');
+        if (themeDropdown && themeDropdown.classList.contains('open')) {
+            if (typeof closeThemePickerDropdown === 'function') {
+                closeThemePickerDropdown(true);
+            } else {
+                themeDropdown.classList.remove('open');
+            }
+            return;
+        }
         const cropModal = document.getElementById('crop-modal');
         if (cropModal && cropModal.classList.contains('active')) {
             closeModal('crop-modal');
@@ -275,35 +287,39 @@ function selectVaultNote(noteName) {
 
 function insertInternalNoteLinkElement(noteName, customDisplay = '') {
     if (!noteName || !content) return;
-    const span = document.createElement('span');
-    span.className = 'note-internal-link';
-    span.setAttribute('data-note', noteName);
-    span.setAttribute('contenteditable', 'false');
-    span.setAttribute('title', `Jump to note: ${noteName}`);
-    const label = customDisplay.trim() || noteName;
-    span.innerHTML = `<iconify-icon icon="solar:link-minimalistic-2-linear"></iconify-icon> ${escapeHtml(label)}`;
-    span.onclick = (e) => jumpToInternalNote(e, noteName);
+    const applyInsertLink = () => {
+        const span = document.createElement('span');
+        span.className = 'note-internal-link';
+        span.setAttribute('data-note', noteName);
+        span.setAttribute('contenteditable', 'false');
+        span.setAttribute('title', `Jump to note: ${noteName}`);
+        const label = customDisplay.trim() || noteName;
+        span.innerHTML = `<iconify-icon icon="solar:link-minimalistic-2-linear"></iconify-icon> ${escapeHtml(label)}`;
+        span.onclick = (e) => jumpToInternalNote(e, noteName);
 
-    const sel = window.getSelection();
-    let inserted = false;
-    if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        if (content.contains(range.commonAncestorContainer)) {
-            range.deleteContents();
-            range.insertNode(span);
-            const space = document.createTextNode(' ');
-            span.parentNode.insertBefore(space, span.nextSibling);
-            range.setStartAfter(space);
-            range.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(range);
-            inserted = true;
+        const sel = window.getSelection();
+        let inserted = false;
+        if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            if (content.contains(range.commonAncestorContainer)) {
+                range.deleteContents();
+                range.insertNode(span);
+                const space = document.createTextNode(' ');
+                span.parentNode.insertBefore(space, span.nextSibling);
+                range.setStartAfter(space);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                inserted = true;
+            }
         }
-    }
-    if (!inserted) {
-        content.appendChild(span);
-        content.appendChild(document.createTextNode(' '));
-    }
+        if (!inserted) {
+            content.appendChild(span);
+            content.appendChild(document.createTextNode(' '));
+        }
+    };
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyInsertLink);
+    else applyInsertLink();
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
 }
 
@@ -417,7 +433,11 @@ function removeLinkFromModal() {
     if (savedTextRange) {
         restoreSelection(savedTextRange);
     }
-    document.execCommand('unlink', false, null);
+    const applyUnlink = () => {
+        document.execCommand('unlink', false, null);
+    };
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyUnlink);
+    else applyUnlink();
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
     closeAllModals();
     showToast('Link removed', 'info');
@@ -462,44 +482,49 @@ function confirmAddLink() {
         restoreSelection(savedTextRange);
     }
 
-    const sel = window.getSelection();
-    const a = document.createElement('a');
-    a.href = url;
-    a.textContent = displayText;
-    a.target = '_blank';
+    const applyWebLink = () => {
+        const sel = window.getSelection();
+        const a = document.createElement('a');
+        a.href = url;
+        a.textContent = displayText;
+        a.target = '_blank';
 
-    let replaced = false;
-    if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        if (content && content.contains(range.commonAncestorContainer)) {
-            // Check if current selection is inside an existing <a>
-            let existingA = range.commonAncestorContainer;
-            while (existingA && existingA !== content && existingA.tagName !== 'A') {
-                existingA = existingA.parentElement;
-            }
+        let replaced = false;
+        if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            if (content && content.contains(range.commonAncestorContainer)) {
+                // Check if current selection is inside an existing <a>
+                let existingA = range.commonAncestorContainer;
+                while (existingA && existingA !== content && existingA.tagName !== 'A') {
+                    existingA = existingA.parentElement;
+                }
 
-            if (existingA && existingA.tagName === 'A') {
-                existingA.href = url;
-                existingA.textContent = displayText;
-                replaced = true;
-            } else {
-                range.deleteContents();
-                range.insertNode(a);
-                const space = document.createTextNode(' ');
-                a.parentNode.insertBefore(space, a.nextSibling);
-                range.setStartAfter(space);
-                range.collapse(true);
-                sel.removeAllRanges();
-                sel.addRange(range);
-                replaced = true;
+                if (existingA && existingA.tagName === 'A') {
+                    existingA.href = url;
+                    existingA.textContent = displayText;
+                    replaced = true;
+                } else {
+                    range.deleteContents();
+                    range.insertNode(a);
+                    const space = document.createTextNode(' ');
+                    a.parentNode.insertBefore(space, a.nextSibling);
+                    range.setStartAfter(space);
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    replaced = true;
+                }
             }
         }
-    }
 
-    if (!replaced && content) {
-        content.appendChild(a);
-        content.appendChild(document.createTextNode(' '));
-    }
+        if (!replaced && content) {
+            content.appendChild(a);
+            content.appendChild(document.createTextNode(' '));
+        }
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyWebLink);
+    else applyWebLink();
 
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
     showToast('Link added', 'success');
@@ -956,29 +981,35 @@ function applyCustomColor(color) {
         restoreSelection(savedColorRange);
     }
 
-    if (color === 'inherit' || color === 'transparent') {
-        if (currentColorCommand === 'foreColor') {
-            document.execCommand('foreColor', false, 'inherit');
-            const ind = document.getElementById('text-color-indicator');
-            if (ind) ind.style.backgroundColor = 'transparent';
+    const applyColorCmd = () => {
+        if (color === 'inherit' || color === 'transparent') {
+            if (currentColorCommand === 'foreColor') {
+                document.execCommand('foreColor', false, 'inherit');
+                const ind = document.getElementById('text-color-indicator');
+                if (ind) ind.style.backgroundColor = 'transparent';
+            } else {
+                document.execCommand('hiliteColor', false, 'transparent');
+                const ind = document.getElementById('bg-color-indicator');
+                if (ind) ind.style.backgroundColor = 'transparent';
+            }
         } else {
-            document.execCommand('hiliteColor', false, 'transparent');
-            const ind = document.getElementById('bg-color-indicator');
-            if (ind) ind.style.backgroundColor = 'transparent';
+            if (currentColorCommand === 'foreColor') {
+                document.execCommand('foreColor', false, color);
+                const ind = document.getElementById('text-color-indicator');
+                if (ind) ind.style.backgroundColor = color;
+            } else {
+                document.execCommand('hiliteColor', false, color);
+                const ind = document.getElementById('bg-color-indicator');
+                if (ind) ind.style.backgroundColor = color;
+            }
         }
-    } else {
-        if (currentColorCommand === 'foreColor') {
-            document.execCommand('foreColor', false, color);
-            const ind = document.getElementById('text-color-indicator');
-            if (ind) ind.style.backgroundColor = color;
-        } else {
-            document.execCommand('hiliteColor', false, color);
-            const ind = document.getElementById('bg-color-indicator');
-            if (ind) ind.style.backgroundColor = color;
-        }
-    }
 
-    if (content) content.focus();
+        if (content) content.focus();
+    };
+
+    if (window.NoshUndo) window.NoshUndo.runWithUndo(applyColorCmd);
+    else applyColorCmd();
+
     if (typeof triggerAutoSave === 'function') triggerAutoSave();
     closeCustomColorPicker();
 }
