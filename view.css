@@ -22,9 +22,11 @@
     --primary-hover: #4338ca;
     --primary-glow: rgba(99, 102, 241, 0.28);
     --accent: #79c0ff;
+    --success: #10b981;
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-code: 'JetBrains Mono', 'Fira Code', monospace;
+    --radius-xs: 4px;
     --radius-sm: 6px;
     --radius-md: 10px;
     --transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -537,10 +539,10 @@ body {
 }
 
 .code-block-header {
-    background: #11141c;
+    background: #151822;
     border-bottom: 1px solid var(--border-subtle);
-    height: 34px;
-    padding: 0 12px;
+    height: 38px;
+    padding: 0 14px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -606,23 +608,34 @@ body {
 }
 
 .code-action-btn {
-    height: 22px;
+    height: 24px;
     padding: 0 8px;
     border-radius: 4px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 11px;
     font-weight: 500;
-    color: var(--text-secondary);
-    background: transparent;
+    line-height: normal;
+    color: #9ca3af;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-subtle);
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    justify-content: center;
+    gap: 4px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    user-select: none;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.code-action-btn iconify-icon {
+    font-size: 11px;
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
 }
 .code-action-btn:hover {
-    color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.22);
 }
 
 .CodeMirror {
