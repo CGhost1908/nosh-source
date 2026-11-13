@@ -16,6 +16,9 @@ function hideAllContextMenus() {
 
 function positionContextMenu(menuEl, pageX, pageY, minWidth = 180, minHeight = 170) {
     if (!menuEl) return;
+    if (window.NoshSidebarPreview) {
+        window.NoshSidebarPreview.hide();
+    }
     menuEl.style.display = 'block';
 
     let left = pageX;

@@ -10,6 +10,9 @@ let savedTextRange = null;
 // Modal Management
 function openModal(modalId) {
     closeAllDropdowns();
+    if (window.NoshSidebarPreview) {
+        window.NoshSidebarPreview.hide();
+    }
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
@@ -103,6 +106,9 @@ function showToast(message, type = 'info', duration = 2500) {
 // Sidebar Toggle
 function toggleSidebar() {
     if (!sidebar) return;
+    if (window.NoshSidebarPreview) {
+        window.NoshSidebarPreview.hide();
+    }
     sidebar.classList.toggle('collapsed');
     const isCollapsed = sidebar.classList.contains('collapsed');
     localStorage.setItem('sidebar-collapsed', isCollapsed ? 'true' : 'false');

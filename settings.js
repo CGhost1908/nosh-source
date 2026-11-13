@@ -64,6 +64,11 @@ function loadSettingsIntoUI() {
     const autoSaveCheckbox = document.getElementById('setting-auto-save');
     if (autoSaveCheckbox) autoSaveCheckbox.checked = autoSave;
 
+    // 2b. Sidebar hover note preview (on by default)
+    const hoverPreview = localStorage.getItem('hover-note-preview') !== 'false';
+    const hoverPreviewCheckbox = document.getElementById('setting-hover-preview');
+    if (hoverPreviewCheckbox) hoverPreviewCheckbox.checked = hoverPreview;
+
     // 3. Save path
     const savePathInput = document.getElementById('setting-save-path');
     if (savePathInput) savePathInput.value = savesDir || '';
@@ -181,6 +186,15 @@ function saveSettings() {
     const autoSaveCheckbox = document.getElementById('setting-auto-save');
     if (autoSaveCheckbox) {
         localStorage.setItem('autoSave', autoSaveCheckbox.checked ? 'true' : 'false');
+    }
+
+    // Sidebar hover note preview
+    const hoverPreviewCheckbox = document.getElementById('setting-hover-preview');
+    if (hoverPreviewCheckbox) {
+        localStorage.setItem('hover-note-preview', hoverPreviewCheckbox.checked ? 'true' : 'false');
+        if (!hoverPreviewCheckbox.checked && window.NoshSidebarPreview) {
+            window.NoshSidebarPreview.hide();
+        }
     }
 
     // YouTube player view

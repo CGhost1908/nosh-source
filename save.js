@@ -619,6 +619,9 @@ function initWelcomeDashboardInteractions(data) {
 
 // Show Welcome / Home Dashboard
 async function showWelcomeDashboard() {
+    if (window.NoshSidebarPreview) {
+        window.NoshSidebarPreview.hide();
+    }
     if (window.NoshUndo) {
         window.NoshUndo.onWelcomeDashboard();
     }
@@ -673,6 +676,9 @@ async function openDesiredFile(noteName, bypassUnsavedCheck = false, forceReload
     if (!noteName) return;
 
     const safeName = path.basename(noteName);
+    if (window.NoshSidebarPreview) {
+        window.NoshSidebarPreview.hide();
+    }
 
     // The note is already open in the editor: keep its current state (draft included),
     // don't reload and don't prompt - reopening the active note is a no-op
@@ -876,6 +882,10 @@ async function deleteSave(noteName, permanent = false) {
 
         if (typeof removeNoteFromSearchCache === 'function') {
             removeNoteFromSearchCache(safeName);
+        }
+        if (window.NoshSidebarPreview) {
+            window.NoshSidebarPreview.invalidate(safeName);
+            window.NoshSidebarPreview.hide();
         }
 
         // Remove from pinned if was pinned
@@ -1379,6 +1389,11 @@ async function renameSave(oldName, newName) {
         if (typeof removeNoteFromSearchCache === 'function') {
             removeNoteFromSearchCache(oldName);
         }
+        if (window.NoshSidebarPreview) {
+            window.NoshSidebarPreview.invalidate(oldName);
+            window.NoshSidebarPreview.invalidate(sanitizedNewName);
+            window.NoshSidebarPreview.hide();
+        }
 
         // Update pinned notes if renamed
         let pinned = getPinnedNotes();
@@ -1516,6 +1531,10 @@ async function renameActiveNoteFromHeader(oldName, rawNewName, { allowUniqueSuff
 
         if (typeof removeNoteFromSearchCache === 'function') {
             removeNoteFromSearchCache(oldName);
+        }
+        if (window.NoshSidebarPreview) {
+            window.NoshSidebarPreview.invalidate(oldName);
+            window.NoshSidebarPreview.invalidate(targetName);
         }
 
         let pinned = getPinnedNotes();

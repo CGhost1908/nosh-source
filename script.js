@@ -241,6 +241,9 @@ async function saveFile() {
         if (typeof updateNoteSearchCache === 'function') {
             updateNoteSearchCache(safeName, content.innerText);
         }
+        if (window.NoshSidebarPreview) {
+            window.NoshSidebarPreview.invalidate(safeName);
+        }
         if (typeof updateStatusBarStats === 'function') {
             updateStatusBarStats();
         }
